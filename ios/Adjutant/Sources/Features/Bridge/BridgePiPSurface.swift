@@ -251,7 +251,15 @@ final class BridgePiPSurface: BridgePiPHandoffTarget {
         pip.cancelPendingStart()
         lastError = "Couldn't start Picture in Picture — \(reason)"
         bridgePiPLog.error("handoff FAILED: \(reason, privacy: .public)")
-        // Drop the 2nd subscriber; the WKWebView in-app surface remains the avatar.
+        // The session-swap (adj-207.5.4) already CLOSED the WKWebView Bridge before the native
+        // session started. A failed hand-off must therefore RESTORE the in-app window —
+        // otherwise the Bridge is ORPHANED (web closed, native failed) with no visible surface,
+        // and the error banner (rendered on the floating window) never shows. Restoring reopens
+        // the one WKWebView session and makes the error visible so the Commander can retry
+        // (adj-207.6.1). `session.open()` is single-instance-guarded, so a later OS did-stop that
+        // also restores is a harmless no-op.
+        restoreWindow()
+        // Drop the 2nd subscriber; the WKWebView in-app surface is the avatar again.
         Task { await client.stop() }
     }
 }
