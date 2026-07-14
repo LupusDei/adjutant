@@ -82,12 +82,19 @@ final class BridgeHost {
         )
         // Wire the Mute control through the surface to the `/avatar` page's mic so
         // muting ACTUALLY disables the mic (adj-207.2.10): `muted` → mic disabled.
+        let windowControls = BridgeSessionWindowControls(session: session) { [webSurface] muted in
+            webSurface.setMicEnabled(!muted)
+        }
         self.windowModel = BridgeFloatingWindowModel(
             state: BridgeWindowState(layout: layout),
-            controls: BridgeSessionWindowControls(session: session) { [webSurface] muted in
-                webSurface.setMicEnabled(!muted)
-            }
+            controls: windowControls
         )
+
+        // Route the floating-window End through the unified host close so it tears down BOTH
+        // the WKWebView session AND (when built) the native PiP surface — one teardown path,
+        // exactly-once from any state (adj-207.6.2). Set post-init: `[weak self]` is only valid
+        // once all stored properties are initialized.
+        windowControls.onEnd = { [weak self] in self?.close() }
 
         // Route the bottom-bar PiP button to the existing manual hand-off
         // (adj-207.2.13). Set after full init so `[weak self]` is valid; evaluated

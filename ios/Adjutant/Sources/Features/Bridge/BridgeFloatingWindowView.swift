@@ -36,8 +36,21 @@ final class BridgeSessionWindowControls: BridgeWindowControlling {
     private let session: BridgeSession
     private let onMuteChanged: (Bool) -> Void
 
-    init(session: BridgeSession, onMuteChanged: @escaping (Bool) -> Void = { _ in }) {
+    /// Unified close hook (adj-207.6.2). When set, `end()` routes through it instead of calling
+    /// `session.close()` directly, so ending from the floating window tears down the WHOLE
+    /// Bridge via ONE path — the WKWebView session AND (when built) the native PiP surface. The
+    /// host wires this to `BridgeHost.close()`. `nil` falls back to a plain session close so
+    /// standalone call sites (and tests) keep working. Settable post-init because the host can
+    /// only capture `self` after full initialization.
+    var onEnd: (() -> Void)?
+
+    init(
+        session: BridgeSession,
+        onEnd: (() -> Void)? = nil,
+        onMuteChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
         self.session = session
+        self.onEnd = onEnd
         self.onMuteChanged = onMuteChanged
     }
 
@@ -55,7 +68,14 @@ final class BridgeSessionWindowControls: BridgeWindowControlling {
     }
 
     func end() {
-        session.close()
+        // Route through the unified host close when wired (tears down web + native PiP as one
+        // path); otherwise close the session directly. Either way teardown is exactly-once
+        // (both are idempotent), so the single-session invariant is preserved (adj-207.6.2).
+        if let onEnd {
+            onEnd()
+        } else {
+            session.close()
+        }
     }
 }
 
