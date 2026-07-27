@@ -119,7 +119,7 @@ struct MissionControlSelectorView: View {
         projects: [.init(id: "adjutant", name: "Adjutant"),
                    .init(id: "bloomfolio", name: "Bloomfolio"),
                    .init(id: "runway", name: "Runway")],
-        selection: .subset(["adjutant", "runway"])
+        selectedIds: ["adjutant", "runway"]
     ))
     .frame(width: 360, height: 420)
     .crtTheme(.starcraft)
@@ -129,7 +129,7 @@ struct MissionControlSelectorView: View {
     MissionControlSelectorView(model: MissionControlSelectorModel(
         projects: [.init(id: "adjutant", name: "Adjutant"),
                    .init(id: "bloomfolio", name: "Bloomfolio")],
-        selection: .all
+        selectedIds: nil
     ))
     .frame(width: 360, height: 360)
     .crtTheme(.starcraft)

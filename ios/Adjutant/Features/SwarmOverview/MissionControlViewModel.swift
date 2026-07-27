@@ -30,6 +30,14 @@ final class MissionControlViewModel: ObservableObject {
     /// (none) is intentional and is preserved across launches.
     @Published private(set) var selectedProjectIds: Set<String>?
 
+    /// The FULL, unfiltered project universe (id + name) for the selector (adj-209.3.2.1).
+    ///
+    /// Sourced from the cheap `GET /api/projects` (≈10ms) — deliberately NOT from the map
+    /// rollup: a server-side `projectIds` filter makes the rollup contain only the *selected*
+    /// projects, so a user could never re-enable a project they deselected. This keeps the fast
+    /// filtered rollup for the MAP while giving the selector every project to toggle.
+    @Published private(set) var allProjects: [Project] = []
+
     /// The last successfully loaded rollup, if any (convenience for the view).
     var rollup: OverviewProjectsResponse? {
         if case let .loaded(response) = state { return response }
@@ -97,6 +105,7 @@ final class MissionControlViewModel: ObservableObject {
 
     func onAppear() {
         Task { await refresh() }
+        Task { await loadAllProjects() }   // full universe for the selector (adj-209.3.2.1)
         // Guard against duplicate timers if onAppear fires more than once.
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
@@ -171,6 +180,17 @@ final class MissionControlViewModel: ObservableObject {
     }
 
     // MARK: - Data loading
+
+    /// Load the full unfiltered project universe for the selector (adj-209.3.2.1). Cheap and
+    /// idempotent; resilient — a failure keeps the last good list rather than clearing it.
+    /// Call on appear and when opening the selector (the project set changes rarely).
+    func loadAllProjects() async {
+        do {
+            allProjects = try await apiClient.getProjects()
+        } catch {
+            // Keep the last good list; the selector simply shows what it last knew.
+        }
+    }
 
     /// Fetch the portfolio rollup. Coalesces overlapping calls (pull-to-refresh + poll).
     func refresh() async {

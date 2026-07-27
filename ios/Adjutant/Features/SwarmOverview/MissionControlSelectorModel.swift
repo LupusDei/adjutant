@@ -2,12 +2,20 @@ import Foundation
 
 /// PURE presenter for the Mission Control project selector (adj-209.3.2).
 ///
-/// Turns the two inputs the selector needs — the currently-available projects and the persisted
-/// ``MissionControlSelection`` — into render-ready output: the checkbox rows, the header button
-/// states (Select all / Deselect all), a compact summary, and the derived server `projectIds`.
-/// No SwiftUI, so the whole selector is a thin shell over verified logic and the
-/// selection → `projectIds` derivation stays owned by ``MissionControlSelection`` (adj-209.3.1),
-/// which the ViewModel (adj-209.2.3) consumes as the single source of truth.
+/// Turns the two inputs the selector needs — the FULL list of available projects and the current
+/// selection — into render-ready output: the checkbox rows, the header button states
+/// (Select all / Deselect all), and a compact summary. No SwiftUI, so the selector is a thin
+/// shell over verified logic.
+///
+/// Selection is modeled exactly as the ViewModel stores it (`selectedProjectIds: Set<String>?`,
+/// adj-209.2.3): **`nil` means all projects** (no explicit filter) and a `Set` — possibly empty —
+/// is an explicit selection. Keeping ONE selection representation (the VM's) avoids a second,
+/// divergent source of truth.
+///
+/// The project list here is the UNFILTERED universe (from a cheap `GET /api/projects`), NOT the
+/// server-filtered map rollup: with a server-side `projectIds` filter the rollup only contains
+/// *selected* projects, so deriving the selector from it would make a deselected project
+/// impossible to re-enable (adj-209.3.2.1).
 struct MissionControlSelectorModel: Equatable {
 
     /// A selectable project — id (canonical) + display name only.
@@ -28,24 +36,29 @@ struct MissionControlSelectorModel: Equatable {
     }
 
     let projects: [Project]
-    let selection: MissionControlSelection
+    /// `nil` == all projects selected; a `Set` (possibly empty) is an explicit selection.
+    let selectedIds: Set<String>?
 
-    init(projects: [Project], selection: MissionControlSelection) {
+    init(projects: [Project], selectedIds: Set<String>?) {
         self.projects = projects
-        self.selection = selection
+        self.selectedIds = selectedIds
     }
 
-    /// The universe of available project ids, in display order.
-    private var available: [String] { projects.map(\.id) }
+    /// Whether a specific project is selected. With no explicit selection (`nil` == all),
+    /// every project reads as selected.
+    func isSelected(_ id: String) -> Bool {
+        selectedIds?.contains(id) ?? true
+    }
 
     /// One row per available project, in order, flagged by the current selection.
     var rows: [Row] {
-        projects.map { Row(id: $0.id, name: $0.name, isSelected: selection.isSelected($0.id)) }
+        projects.map { Row(id: $0.id, name: $0.name, isSelected: isSelected($0.id)) }
     }
 
-    /// Number of AVAILABLE projects currently selected (stale ids are not counted).
+    /// Number of AVAILABLE projects currently selected (ids not in the universe don't count).
     var selectedCount: Int {
-        selection.selectedIds(available: available).count
+        guard let ids = selectedIds else { return projects.count } // nil == all
+        return projects.reduce(0) { $0 + (ids.contains($1.id) ? 1 : 0) }
     }
 
     /// True when every available project is selected — drives the "Select all" active state.
@@ -57,11 +70,6 @@ struct MissionControlSelectorModel: Equatable {
     /// True when no available project is selected — drives the "Deselect all" active state.
     var isNoneSelected: Bool {
         selectedCount == 0
-    }
-
-    /// The server-side `projectIds` filter for the current selection (`nil` == fetch all).
-    var projectIds: [String]? {
-        selection.projectIds(available: available)
     }
 
     /// A compact status line for the selector's trigger control.
