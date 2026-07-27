@@ -130,4 +130,91 @@ final class APIClientOverviewProjectsTests: XCTestCase {
             // expected
         }
     }
+
+    // MARK: - projectIds filter (epic adj-209, US2 / adj-209.2.2)
+    //
+    // The selection drives a server-side fast path: `?projectIds=a,b,c` rolls up only the
+    // chosen projects. The client comma-joins a non-empty selection into a single
+    // `projectIds` query item and OMITS the param entirely for nil / empty (== "all").
+
+    /// Decodes the `projectIds` query value from a captured request URL, if present.
+    private func capturedProjectIds(from url: URL?) -> String? {
+        guard let url,
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        return components.queryItems?.first(where: { $0.name == "projectIds" })?.value
+    }
+
+    private func installCapturingSuccessMock(_ sink: @escaping (URLRequest) -> Void) {
+        MockURLProtocol.mockHandler = { request in
+            sink(request)
+            return try MockURLProtocol.mockResponse(json: [
+                "success": true,
+                "data": Self.dataPayload,
+                "timestamp": "2026-07-27T10:00:00.000Z"
+            ])(request)
+        }
+    }
+
+    func testDefaultCallOmitsProjectIdsQuery() async throws {
+        var captured: URL?
+        installCapturingSuccessMock { captured = $0.url }
+
+        _ = try await client.getOverviewProjects()
+        XCTAssertNil(capturedProjectIds(from: captured),
+                     "No projectIds arg → no projectIds query param (roll up all projects)")
+    }
+
+    func testNilProjectIdsOmitsQuery() async throws {
+        var captured: URL?
+        installCapturingSuccessMock { captured = $0.url }
+
+        _ = try await client.getOverviewProjects(projectIds: nil)
+        XCTAssertNil(capturedProjectIds(from: captured),
+                     "nil projectIds → param omitted")
+    }
+
+    func testEmptyProjectIdsOmitsQuery() async throws {
+        var captured: URL?
+        installCapturingSuccessMock { captured = $0.url }
+
+        _ = try await client.getOverviewProjects(projectIds: [])
+        XCTAssertNil(capturedProjectIds(from: captured),
+                     "empty projectIds → param omitted (empty selection is not sent)")
+    }
+
+    func testProjectIdsEncodedAsCommaJoined() async throws {
+        var captured: URL?
+        installCapturingSuccessMock { captured = $0.url }
+
+        _ = try await client.getOverviewProjects(projectIds: ["alpha", "beta", "gamma"])
+        XCTAssertEqual(capturedProjectIds(from: captured), "alpha,beta,gamma",
+                       "non-empty selection is comma-joined into a single projectIds item")
+    }
+
+    func testSingleProjectIdEncoded() async throws {
+        var captured: URL?
+        installCapturingSuccessMock { captured = $0.url }
+
+        _ = try await client.getOverviewProjects(projectIds: ["0e578d15"])
+        XCTAssertEqual(capturedProjectIds(from: captured), "0e578d15",
+                       "a single-project selection encodes as just that id")
+    }
+
+    func testProjectIdsFilterStillDecodesRollup() async throws {
+        installCapturingSuccessMock { _ in }
+        let rollup = try await client.getOverviewProjects(projectIds: ["alpha"])
+        XCTAssertEqual(rollup.projects.count, 2, "filtered call decodes the same envelope shape")
+    }
+
+    func testProjectIdsFilterPropagatesServerError() async {
+        MockURLProtocol.mockHandler = MockURLProtocol.mockError(
+            statusCode: 500, code: "INTERNAL_ERROR", message: "rollup failed"
+        )
+        do {
+            _ = try await client.getOverviewProjects(projectIds: ["alpha"])
+            XCTFail("Expected an error to surface on the filtered call too")
+        } catch {
+            // expected
+        }
+    }
 }

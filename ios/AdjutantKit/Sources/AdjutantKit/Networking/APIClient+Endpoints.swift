@@ -275,16 +275,29 @@ extension APIClient {
         return try await requestWithEnvelope(.get, path: "/overview")
     }
 
-    /// Get the Mission Control portfolio rollup (epic adj-208, US2).
+    /// Get the Mission Control portfolio rollup (epic adj-208, US2; filter adj-209, US2).
     ///
     /// Maps to `GET /api/overview/projects`. Returns, per project, the active epic +
-    /// completion, remaining open epics/beads, assigned agents, and a coordination
-    /// status, plus portfolio-wide totals — enough to render the whole map in one request.
+    /// completion, remaining open epics/beads, assigned agents, per-feature intensity
+    /// (`features[]` + `activityLevel`), and a coordination status, plus portfolio-wide
+    /// totals — enough to render the whole map in one request.
     ///
+    /// - Parameter projectIds: Optional selection filter. When non-empty, the ids are
+    ///   comma-joined into a single `?projectIds=a,b,c` query so the server rolls up only
+    ///   those projects (the fast path that sidesteps cold-dolt noise). A `nil` or empty
+    ///   selection omits the param entirely, which the backend treats as "all projects".
     /// - Returns: The decoded ``OverviewProjectsResponse`` from the standard envelope.
     /// - Throws: ``APIClientError`` if the request fails or the server returns an error envelope.
-    public func getOverviewProjects() async throws -> OverviewProjectsResponse {
-        return try await requestWithEnvelope(.get, path: "/overview/projects")
+    public func getOverviewProjects(projectIds: [String]? = nil) async throws -> OverviewProjectsResponse {
+        var queryItems: [URLQueryItem] = []
+        if let projectIds, !projectIds.isEmpty {
+            queryItems.append(URLQueryItem(name: "projectIds", value: projectIds.joined(separator: ",")))
+        }
+        return try await requestWithEnvelope(
+            .get,
+            path: "/overview/projects",
+            queryItems: queryItems.isEmpty ? nil : queryItems
+        )
     }
 }
 
