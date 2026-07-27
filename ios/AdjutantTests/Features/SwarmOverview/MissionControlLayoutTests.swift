@@ -240,4 +240,135 @@ final class MissionControlLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(b.legendY - b.captionY, 20 - eps,
                                     "Minimum separation holds regardless of height")
     }
+
+    // MARK: - intensity(activityLevel:) — busier ⇒ hotter (adj-209.4.1)
+
+    func testIntensityIsMonotonicAcrossThicknessGlowAndFlow() {
+        // Every output channel must strictly increase from cold (0) to hot (1).
+        let cold = MissionControlLayout.intensity(activityLevel: 0)
+        let warm = MissionControlLayout.intensity(activityLevel: 0.5)
+        let hot = MissionControlLayout.intensity(activityLevel: 1)
+
+        XCTAssertLessThan(cold.streamThickness, warm.streamThickness)
+        XCTAssertLessThan(warm.streamThickness, hot.streamThickness)
+
+        XCTAssertLessThan(cold.glowRadius, warm.glowRadius)
+        XCTAssertLessThan(warm.glowRadius, hot.glowRadius)
+
+        XCTAssertLessThan(cold.flowSpeed, warm.flowSpeed)
+        XCTAssertLessThan(warm.flowSpeed, hot.flowSpeed)
+    }
+
+    func testIntensityMonotonicOverFineSweep() {
+        var prev = MissionControlLayout.intensity(activityLevel: 0)
+        var a: CGFloat = 0.05
+        while a <= 1.0 + eps {
+            let cur = MissionControlLayout.intensity(activityLevel: a)
+            XCTAssertGreaterThan(cur.streamThickness, prev.streamThickness - eps, "thickness non-decreasing at \(a)")
+            XCTAssertGreaterThan(cur.glowRadius, prev.glowRadius - eps, "glow non-decreasing at \(a)")
+            XCTAssertGreaterThan(cur.flowSpeed, prev.flowSpeed - eps, "flow non-decreasing at \(a)")
+            prev = cur
+            a += 0.05
+        }
+    }
+
+    func testIntensityClampsBelowZeroToCold() {
+        let low = MissionControlLayout.intensity(activityLevel: -3)
+        let zero = MissionControlLayout.intensity(activityLevel: 0)
+        XCTAssertEqual(low.streamThickness, zero.streamThickness, accuracy: eps)
+        XCTAssertEqual(low.glowRadius, zero.glowRadius, accuracy: eps)
+        XCTAssertEqual(low.flowSpeed, zero.flowSpeed, accuracy: eps)
+    }
+
+    func testIntensityClampsAboveOneToHot() {
+        let high = MissionControlLayout.intensity(activityLevel: 5)
+        let one = MissionControlLayout.intensity(activityLevel: 1)
+        XCTAssertEqual(high.streamThickness, one.streamThickness, accuracy: eps)
+        XCTAssertEqual(high.glowRadius, one.glowRadius, accuracy: eps)
+        XCTAssertEqual(high.flowSpeed, one.flowSpeed, accuracy: eps)
+    }
+
+    func testIntensityColdFloorIsVisiblePositive() {
+        // Even an idle stream must be drawable (non-zero thickness/flow) — never invisible.
+        let cold = MissionControlLayout.intensity(activityLevel: 0)
+        XCTAssertGreaterThan(cold.streamThickness, 0, "Idle stream still renders")
+        XCTAssertGreaterThan(cold.flowSpeed, 0, "Idle stream still animates (slowly)")
+        XCTAssertGreaterThanOrEqual(cold.glowRadius, 0)
+    }
+
+    func testHighActivityIsClearlyHotterThanLowWithHeadroom() {
+        // The proposal's core cue: high must be *visibly* hotter, not marginally.
+        // Require a strong multiplicative separation (headroom) on each channel.
+        let low = MissionControlLayout.intensity(activityLevel: 0.1)
+        let high = MissionControlLayout.intensity(activityLevel: 0.9)
+        XCTAssertGreaterThan(high.streamThickness, low.streamThickness * 1.8,
+                             "Hot stream is at least ~1.8x thicker than a barely-active one")
+        XCTAssertGreaterThan(high.flowSpeed, low.flowSpeed * 1.8,
+                             "Hot stream flows at least ~1.8x faster")
+        XCTAssertGreaterThan(high.glowRadius, low.glowRadius + 4,
+                             "Hot node glow has clear extra radius")
+    }
+
+    // MARK: - featureNodePositions — features fan out within a project stream (adj-209.4.1)
+
+    func testFeatureNodePositionsCountMatchesInput() {
+        let pts = MissionControlLayout.featureNodePositions(
+            count: 4, streamX: 150, epicY: 90, hubY: 560, spread: 60
+        )
+        XCTAssertEqual(pts.count, 4)
+    }
+
+    func testFeatureNodePositionsEmptyForZero() {
+        XCTAssertTrue(MissionControlLayout.featureNodePositions(
+            count: 0, streamX: 150, epicY: 90, hubY: 560, spread: 60).isEmpty)
+    }
+
+    func testSingleFeatureSitsOnStreamCenterline() {
+        let pts = MissionControlLayout.featureNodePositions(
+            count: 1, streamX: 150, epicY: 90, hubY: 560, spread: 60)
+        XCTAssertEqual(pts.count, 1)
+        XCTAssertEqual(pts[0].x, 150, accuracy: eps, "A lone feature stays on the stream's x")
+    }
+
+    func testFeaturesFanSymmetricallyAroundStreamX() {
+        let streamX: CGFloat = 200
+        let pts = MissionControlLayout.featureNodePositions(
+            count: 2, streamX: streamX, epicY: 90, hubY: 560, spread: 80)
+        // Two features straddle the centerline with equal offset.
+        let offsets = pts.map { $0.x - streamX }
+        XCTAssertEqual(offsets[0], -offsets[1], accuracy: eps, "Fan is symmetric about the stream centerline")
+        XCTAssertEqual((offsets[0] + offsets[1]) / 2, 0, accuracy: eps, "Mean x equals the stream centerline")
+    }
+
+    func testFeatureNodesStayWithinVerticalBandBetweenEpicAndHub() {
+        let epicY: CGFloat = 90, hubY: CGFloat = 560
+        let pts = MissionControlLayout.featureNodePositions(
+            count: 5, streamX: 150, epicY: epicY, hubY: hubY, spread: 60)
+        for p in pts {
+            XCTAssertGreaterThanOrEqual(p.y, epicY - eps, "Feature never rises above the epic node")
+            XCTAssertLessThanOrEqual(p.y, hubY + eps, "Feature never drops below the hub")
+        }
+    }
+
+    func testFeatureNodesAreVerticallyDistinct() {
+        // Distinct nodes must not stack on one y (would read as a single node).
+        let pts = MissionControlLayout.featureNodePositions(
+            count: 4, streamX: 150, epicY: 90, hubY: 560, spread: 60)
+        let ys = pts.map { $0.y }
+        for i in 1..<ys.count {
+            XCTAssertNotEqual(ys[i], ys[i - 1], accuracy: 0.5, "Feature nodes occupy distinct vertical positions")
+        }
+    }
+
+    func testFeatureFanStaysWithinHorizontalBoundsWhenClamped() {
+        // Even with a large requested spread, a clamp keeps every node inside [margin, width-margin].
+        let width: CGFloat = 402, margin: CGFloat = 46, streamX: CGFloat = margin // leftmost stream
+        let pts = MissionControlLayout.featureNodePositions(
+            count: 6, streamX: streamX, epicY: 90, hubY: 560, spread: 400,
+            minX: margin, maxX: width - margin)
+        for p in pts {
+            XCTAssertGreaterThanOrEqual(p.x, margin - eps, "Feature node clamped inside the left margin")
+            XCTAssertLessThanOrEqual(p.x, width - margin + eps, "Feature node clamped inside the right margin")
+        }
+    }
 }

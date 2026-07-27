@@ -155,4 +155,102 @@ enum MissionControlLayout {
         let legendY = max(height - bottomInset, captionY + minSeparation)
         return (captionY: captionY, legendY: legendY)
     }
+
+    // MARK: - Per-feature agentic intensity (adj-209.4.1)
+
+    /// Visual "heat" for a project stream, derived from a normalized composite activity level
+    /// (agents + report_progress cadence + in-progress beads; computed backend-side, 0…1).
+    ///
+    /// The proposal's signature cue is **busier ⇒ hotter**: an active stream must read as
+    /// clearly hotter than an idle one at a glance, not marginally. Each channel therefore has
+    /// a visible cold FLOOR (an idle stream still renders and drifts) plus generous HEADROOM so
+    /// the hot end is a large multiple of the cold end.
+    struct Intensity: Equatable {
+        /// Stroke width of the stream path.
+        let streamThickness: CGFloat
+        /// Glow radius around the stream/nodes (0 at the cold floor is allowed).
+        let glowRadius: CGFloat
+        /// Animated flow speed multiplier (dashes/particles per second scale).
+        let flowSpeed: CGFloat
+    }
+
+    /// Maps a composite `activityLevel` (clamped to 0…1) to a monotonic ``Intensity``.
+    ///
+    /// Monotonic and clamped on every channel. The mapping is a simple, auditable linear
+    /// interpolation from a cold floor to a hot ceiling — chosen so the ratios have real
+    /// headroom (thickness ~2.5x, flow ~3x, glow +8pt) rather than a subtle nudge. Linear (not
+    /// eased) keeps `intensity` trivially monotonic and unit-testable; any easing belongs in the
+    /// animation layer, not here.
+    static func intensity(activityLevel: CGFloat) -> Intensity {
+        let t = min(max(activityLevel, 0), 1)
+
+        // Cold floor → hot ceiling. Floors keep an idle stream visible; ceilings give headroom.
+        let thickness = lerp(2.0, 5.5, t)   // 2.75x
+        let glow      = lerp(0.0, 9.0, t)   // +9pt of bloom at full heat
+        let speed     = lerp(0.35, 1.6, t)  // ~4.5x faster flow when hot
+
+        return Intensity(streamThickness: thickness, glowRadius: glow, flowSpeed: speed)
+    }
+
+    /// Linear interpolation helper (kept private to the pure layer).
+    private static func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+        a + (b - a) * t
+    }
+
+    // MARK: - Per-feature node layout (adj-209.4.1)
+
+    /// Positions of a project's FEATURE nodes along (and fanned around) its stream.
+    ///
+    /// A project stream branches into its N in-progress features. Features are distributed
+    /// **vertically** between the epic node (`epicY`, top) and the hub (`hubY`, bottom) so each
+    /// occupies a distinct height, and **fanned horizontally** — evenly spread across ±`spread`/2
+    /// and centered (mean offset 0) on the stream centerline (`streamX`) — so multiple features
+    /// never stack into one dot. The fan is clamped to `[minX, maxX]` when provided, so the
+    /// outermost streams' features never spill off-screen (mirrors ``clampedCenterX`` for labels).
+    ///
+    /// - `count <= 0` → empty.
+    /// - A single feature sits exactly on the centerline, mid-band.
+    /// - Nodes stay strictly inside the `[epicY, hubY]` band (never above the epic or below the hub).
+    static func featureNodePositions(
+        count: Int,
+        streamX: CGFloat,
+        epicY: CGFloat,
+        hubY: CGFloat,
+        spread: CGFloat,
+        minX: CGFloat = -.greatestFiniteMagnitude,
+        maxX: CGFloat = .greatestFiniteMagnitude
+    ) -> [CGPoint] {
+        guard count > 0 else { return [] }
+        guard count > 1 else {
+            let midY = (epicY + hubY) / 2
+            let x = min(max(streamX, minX), maxX)
+            return [CGPoint(x: x, y: midY)]
+        }
+
+        // Inset the band by a fraction of a slot so nodes never sit exactly on the epic/hub.
+        let bandTop = epicY, bandBottom = hubY
+        let span = bandBottom - bandTop
+        let inset = span / CGFloat(count + 1)
+        let usable = span - 2 * inset
+        let step = usable / CGFloat(count - 1)
+
+        let half = spread / 2
+        return (0..<count).map { i -> CGPoint in
+            let y = bandTop + inset + step * CGFloat(i)
+            // Symmetric zig-zag around the centerline: -half, +half, -half/2, +half/2, ...
+            // Even count straddles the line; odd count keeps the middle node centered.
+            let offset = fanOffset(index: i, count: count, half: half)
+            let x = min(max(streamX + offset, minX), maxX)
+            return CGPoint(x: x, y: y)
+        }
+    }
+
+    /// Symmetric horizontal fan offset for feature `index` of `count`, spanning ±`half`.
+    /// Produces a balanced spread whose mean is 0 (centered on the stream) for any count.
+    private static func fanOffset(index i: Int, count: Int, half: CGFloat) -> CGFloat {
+        guard count > 1 else { return 0 }
+        // Evenly space offsets across [-half, +half]; the midpoint lands on 0.
+        let t = CGFloat(i) / CGFloat(count - 1)      // 0…1
+        return -half + t * (2 * half)                 // -half…+half
+    }
 }
