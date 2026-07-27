@@ -753,6 +753,61 @@ describe("beads-repository", () => {
       expect(result.success).toBe(true);
       expect(result.data).toEqual([]);
     });
+
+    // adj-208.1.4 regression: `bd show <epic> --json` returns `dependencies` as
+    // full child issue objects with an added `dependency_type` field
+    // ({ id, status, dependency_type }) — NOT the `bd list` edge tuple
+    // ({ issue_id, depends_on_id, type }). computeEpicProgress feeds these show
+    // deps into computeEpicProgressFromDeps, so before the shape fix every epic
+    // read totalChildren=0/completionPercent=0 (flat Mission Control rings).
+    //
+    // `dependencies` is cast to the real CLI shape because the TS BeadsIssue type
+    // wrongly declares only the list-tuple shape — the mistyping is the bug's root
+    // (Constitution Rule 1: assert against the shape the CLI actually emits).
+    const SHOW_DEPS = [
+      { id: "hq-ep1.1", title: "child a", status: "closed", issue_type: "task", priority: 1, dependency_type: "blocks", owner: "eng@example.com", created_at: "2026-07-03T10:00:00Z", created_by: "Eng", updated_at: "2026-07-19T10:00:00Z" },
+      { id: "hq-ep1.2", title: "child b", status: "closed", issue_type: "task", priority: 1, dependency_type: "blocks", owner: "eng@example.com", created_at: "2026-07-03T10:00:00Z", created_by: "Eng", updated_at: "2026-07-19T11:00:00Z" },
+      { id: "hq-ep1.3", title: "child c", status: "open", issue_type: "task", priority: 1, dependency_type: "blocks", owner: "eng@example.com", created_at: "2026-07-03T10:00:00Z", created_by: "Eng", updated_at: "2026-07-04T10:00:00Z" },
+    ] as unknown as BeadsIssue["dependencies"];
+
+    function mockEpicWithShowDeps(allBeadsForStatusMap: BeadsIssue[]) {
+      const epic = createIssue({ id: "hq-ep1", title: "Epic", issue_type: "epic", status: "in_progress" });
+      const detail = createIssue({ id: "hq-ep1", title: "Epic", issue_type: "epic", status: "in_progress" });
+      detail.dependencies = SHOW_DEPS;
+      vi.mocked(execBd).mockImplementation(async (args: string[]) => {
+        if (args[0] === "show") return bdSuccess([detail]);
+        if (args.includes("epic")) return bdSuccess([epic]); // list --type epic
+        return bdSuccess(allBeadsForStatusMap); // list --all (statusMap source)
+      });
+    }
+
+    it("should count children from bd show dependency shape ({id, dependency_type})", async () => {
+      // statusMap ALSO knows the children (mirrors production's list --all pass).
+      mockEpicWithShowDeps([
+        createIssue({ id: "hq-ep1.1", status: "closed" }),
+        createIssue({ id: "hq-ep1.2", status: "closed" }),
+        createIssue({ id: "hq-ep1.3", status: "open" }),
+      ]);
+
+      const result = await computeEpicProgress("/tmp/project");
+      expect(result.success).toBe(true);
+      const ep = result.data?.find((e) => e.id === "hq-ep1");
+      expect(ep?.totalChildren).toBe(3);
+      expect(ep?.closedChildren).toBe(2);
+      expect(ep?.completionPercent).toBeCloseTo(2 / 3, 4);
+    });
+
+    it("should derive closed count from the show dep's embedded status when the statusMap lacks the children", async () => {
+      // statusMap EMPTY → closed detection must come from the show dep's own
+      // `status` field. Proves the fix does not silently depend on the list --all pass.
+      mockEpicWithShowDeps([]);
+
+      const result = await computeEpicProgress("/tmp/project");
+      const ep = result.data?.find((e) => e.id === "hq-ep1");
+      expect(ep?.totalChildren).toBe(3);
+      expect(ep?.closedChildren).toBe(2);
+      expect(ep?.completionPercent).toBeCloseTo(2 / 3, 4);
+    });
   });
 
   // ===========================================================================
