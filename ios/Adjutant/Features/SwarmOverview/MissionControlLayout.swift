@@ -120,4 +120,39 @@ enum MissionControlLayout {
         let f = min(max(completionFraction, 0), 1)
         return CGPoint(x: streamX, y: topMargin + f * band)
     }
+
+    // MARK: - Edge-safe label centering (adj-208.3.4.1a)
+
+    /// Clamps a centered label's x so its box `[c - width/2, c + width/2]` stays inside the safe
+    /// span `[margin, drawWidth - margin]`.
+    ///
+    /// The outermost project streams sit AT the horizontal margin, so a label centered on the node
+    /// would spill off the screen edge. This nudges the leftmost label right and the rightmost label
+    /// left just enough to keep both edges on-screen. If the label is wider than the safe span (it
+    /// cannot fit either way — the caller should also shrink/wrap the text), it is centered.
+    static func clampedCenterX(desiredCenterX: CGFloat, labelWidth: CGFloat, drawWidth: CGFloat, margin: CGFloat) -> CGFloat {
+        let half = labelWidth / 2
+        let minCenter = margin + half
+        let maxCenter = drawWidth - margin - half
+        guard minCenter <= maxCenter else { return drawWidth / 2 }
+        return min(max(desiredCenterX, minCenter), maxCenter)
+    }
+
+    // MARK: - Bottom band: hub caption + legend (adj-208.3.4.1b)
+
+    /// Y positions for the bottom band — the hub's "COORDINATOR" caption and the shape legend.
+    /// Guarantees the legend sits at least `minSeparation` BELOW the caption so they never collide,
+    /// regardless of canvas height.
+    static func bottomBand(
+        height: CGFloat,
+        hubY: CGFloat,
+        hubRadius: CGFloat,
+        captionGap: CGFloat = 11,
+        bottomInset: CGFloat = 16,
+        minSeparation: CGFloat = 20
+    ) -> (captionY: CGFloat, legendY: CGFloat) {
+        let captionY = hubY + hubRadius + captionGap
+        let legendY = max(height - bottomInset, captionY + minSeparation)
+        return (captionY: captionY, legendY: legendY)
+    }
 }
