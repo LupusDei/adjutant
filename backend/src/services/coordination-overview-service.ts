@@ -275,18 +275,24 @@ export function createCoordinationOverviewService(
     agentsByProjectName: Map<string, AgentMarker[]>,
     openQuestionCount: number
   ): ProjectStreamRollup {
+    const agents = agentsByProjectName.get(proj.name) ?? [];
     return {
       projectId: proj.id,
       name: proj.name,
       activeEpic: bead.activeEpic,
       epicsRemaining: bead.epicsRemaining,
       openBeadsRemaining: bead.openBeadsRemaining,
-      agents: agentsByProjectName.get(proj.name) ?? [],
+      agents,
       status: bead.hasBlocked
         ? "blocked"
         : openQuestionCount > 0
           ? "needs_input"
           : "on_track",
+      // adj-209.1.1 scaffold: default-safe placeholders. The real per-feature
+      // breakdown + composite activityLevel land in adj-209.1.2.
+      features: [],
+      activityLevel: 0,
+      agentCount: agents.length,
       degraded,
     };
   }
