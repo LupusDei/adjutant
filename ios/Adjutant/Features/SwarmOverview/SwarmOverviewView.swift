@@ -9,22 +9,28 @@ struct SwarmOverviewView: View {
     @State private var skeletonPulse = false
     /// Tracks whether a long-press gesture fired, to suppress the button's tap action on release.
     @State private var longPressTriggered = false
+    /// Overview segmented control (adj-208.3.4) — default Summary; Mission Control is opt-in.
+    @State private var segment: MissionControlSegment = .defaultSegment
+    /// Drives the Mission Control map: loading/loaded/error + pull-to-refresh + ~30s poll.
+    @StateObject private var missionControl = MissionControlViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.isLoading && viewModel.overview == nil {
-                loadingSkeleton
-            } else if let error = viewModel.errorMessage, viewModel.overview == nil {
-                errorView(error)
-            } else if let overview = viewModel.overview {
-                overviewContent(overview)
-            } else {
-                emptyView
+            segmentPicker
+
+            switch segment {
+            case .summary:
+                summaryContent
+            case .missionControl:
+                missionControlContent
             }
         }
         .background(theme.background.screen)
         .onAppear { viewModel.onAppear() }
-        .onDisappear { viewModel.onDisappear() }
+        .onDisappear {
+            viewModel.onDisappear()
+            missionControl.onDisappear()  // stop the map poll when leaving the Overview tab
+        }
         .onChange(of: viewModel.spawnedSessionId) { _, newId in
             if let sessionId = newId {
                 coordinator.pendingChatAgentId = sessionId
@@ -38,6 +44,93 @@ struct SwarmOverviewView: View {
                 Task<Void, Never> { await viewModel.startAgent(callsign: callsign) }
             }
         }
+    }
+
+    // MARK: - Segmented control (adj-208.3.4)
+
+    private var segmentPicker: some View {
+        Picker("View", selection: $segment) {
+            ForEach(MissionControlSegment.allCases) { seg in
+                Text(seg.title).tag(seg)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, CRTTheme.Spacing.md)
+        .padding(.top, CRTTheme.Spacing.sm)
+        .padding(.bottom, CRTTheme.Spacing.xs)
+    }
+
+    /// The existing Overview dashboard — UNCHANGED (spec US3), just gated behind the Summary segment.
+    @ViewBuilder
+    private var summaryContent: some View {
+        if viewModel.isLoading && viewModel.overview == nil {
+            loadingSkeleton
+        } else if let error = viewModel.errorMessage, viewModel.overview == nil {
+            errorView(error)
+        } else if let overview = viewModel.overview {
+            overviewContent(overview)
+        } else {
+            emptyView
+        }
+    }
+
+    // MARK: - Mission Control (adj-208.3.4)
+
+    /// The Mission Control map segment: native `MissionControlMapView` driven by
+    /// `MissionControlViewModel`, with pull-to-refresh and a ~30s poll that runs ONLY while
+    /// this segment is on screen (started/stopped by its `onAppear`/`onDisappear`). View-only.
+    private var missionControlContent: some View {
+        GeometryReader { geo in
+            ScrollView {
+                missionControlMap(height: max(geo.size.height, 480))
+                    .frame(width: geo.size.width)
+            }
+            .refreshable { await missionControl.refresh() }
+        }
+        .onAppear { missionControl.onAppear() }
+        .onDisappear { missionControl.onDisappear() }
+    }
+
+    @ViewBuilder
+    private func missionControlMap(height: CGFloat) -> some View {
+        if let rollup = missionControl.rollup {
+            // Non-nil rollup (possibly empty projects — the map renders its own empty state).
+            MissionControlMapView(projects: rollup.projects, totals: rollup.totals)
+                .frame(height: height)
+        } else {
+            switch missionControl.state {
+            case .error(let message):
+                mcErrorView(message).frame(height: height)
+            default:  // .loading (or the impossible loaded-without-rollup) → spinner
+                mcLoadingView.frame(height: height)
+            }
+        }
+    }
+
+    private var mcLoadingView: some View {
+        VStack(spacing: CRTTheme.Spacing.md) {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: theme.primary))
+                .scaleEffect(1.3)
+            CRTText("LOADING MISSION CONTROL...", style: .caption, color: theme.dim)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func mcErrorView(_ message: String) -> some View {
+        VStack(spacing: CRTTheme.Spacing.md) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40))
+                .foregroundColor(CRTTheme.State.warning)
+            CRTText("MISSION CONTROL UNAVAILABLE", style: .subheader, color: CRTTheme.State.warning)
+            CRTText(message, style: .caption, color: theme.dim)
+                .multilineTextAlignment(.center)
+            CRTButton("RETRY", variant: .secondary, size: .medium) {
+                Task<Void, Never> { await missionControl.refresh() }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(CRTTheme.Spacing.lg)
     }
 
     // MARK: - Content
