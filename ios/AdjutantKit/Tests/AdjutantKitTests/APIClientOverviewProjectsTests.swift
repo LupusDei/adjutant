@@ -36,7 +36,7 @@ final class APIClientOverviewProjectsTests: XCTestCase {
                 "activeEpic": [
                     "id": "adj-208",
                     "title": "Mission Control",
-                    "completionPercent": 0.42,
+                    "completionPercent": 42,
                     "closedChildren": 5,
                     "totalChildren": 12
                 ],
@@ -64,7 +64,7 @@ final class APIClientOverviewProjectsTests: XCTestCase {
             "openBeadsRemaining": 31,
             "blocked": 1,
             "needsInput": 0,
-            "portfolioCompletionPercent": 0.21
+            "portfolioCompletionPercent": 21
         ]
     ]
 
@@ -104,7 +104,7 @@ final class APIClientOverviewProjectsTests: XCTestCase {
         XCTAssertEqual(rollup.projects[0].activeEpic?.id, "adj-208")
         XCTAssertNil(rollup.projects[1].activeEpic)
         XCTAssertEqual(rollup.totals.agentsActive, 1)
-        XCTAssertEqual(rollup.totals.portfolioCompletionPercent, 0.21, accuracy: 0.0001)
+        XCTAssertEqual(rollup.totals.portfolioCompletionPercent, 21, accuracy: 0.0001)
     }
 
     // MARK: - Error path

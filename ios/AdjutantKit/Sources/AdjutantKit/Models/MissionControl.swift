@@ -98,7 +98,9 @@ public struct ActiveEpic: Codable, Equatable, Identifiable {
     /// Epic bead id (e.g. `"adj-208"`), also the `Identifiable` id.
     public let id: String
     public let title: String
-    /// Completion ratio from 0.0 to 1.0.
+    /// Completion of the epic's children as an integer percent, 0–100.
+    /// (Backend emits `Math.round(fraction * 100)`; typed as `Double` to tolerate drift
+    /// and to feed the map's completion-ring math directly — divide by 100 for a fraction.)
     public let completionPercent: Double
     public let closedChildren: Int
     public let totalChildren: Int
@@ -143,7 +145,8 @@ public struct PortfolioTotals: Codable, Equatable {
     public let openBeadsRemaining: Int
     public let blocked: Int
     public let needsInput: Int
-    /// Portfolio completion ratio from 0.0 to 1.0.
+    /// Portfolio completion as an integer percent, 0–100 (mean of active epics'
+    /// `completionPercent`; 0 when no epic is active). Typed as `Double` to tolerate drift.
     public let portfolioCompletionPercent: Double
 
     public init(

@@ -35,7 +35,7 @@ final class MissionControlModelTests: XCTestCase {
           "activeEpic": {
             "id": "adj-208",
             "title": "Mission Control — iOS-first coordination map",
-            "completionPercent": 0.42,
+            "completionPercent": 42,
             "closedChildren": 5,
             "totalChildren": 12
           },
@@ -64,7 +64,7 @@ final class MissionControlModelTests: XCTestCase {
         "openBeadsRemaining": 31,
         "blocked": 1,
         "needsInput": 0,
-        "portfolioCompletionPercent": 0.21
+        "portfolioCompletionPercent": 21
       }
     }
     """
@@ -97,7 +97,8 @@ final class MissionControlModelTests: XCTestCase {
         let epic = try XCTUnwrap(adjutant.activeEpic)
         XCTAssertEqual(epic.id, "adj-208")
         XCTAssertEqual(epic.title, "Mission Control — iOS-first coordination map")
-        XCTAssertEqual(epic.completionPercent, 0.42, accuracy: 0.0001)
+        XCTAssertEqual(epic.completionPercent, 42, accuracy: 0.0001,
+                       "completionPercent is an integer 0–100 (backend Math.round(fraction*100))")
         XCTAssertEqual(epic.closedChildren, 5)
         XCTAssertEqual(epic.totalChildren, 12)
     }
@@ -175,7 +176,8 @@ final class MissionControlModelTests: XCTestCase {
         XCTAssertEqual(totals.openBeadsRemaining, 31)
         XCTAssertEqual(totals.blocked, 1)
         XCTAssertEqual(totals.needsInput, 0)
-        XCTAssertEqual(totals.portfolioCompletionPercent, 0.21, accuracy: 0.0001)
+        XCTAssertEqual(totals.portfolioCompletionPercent, 21, accuracy: 0.0001,
+                       "portfolioCompletionPercent is an integer 0–100")
     }
 
     // MARK: - Envelope-aware decode (ApiResponse<OverviewProjectsResponse>)
