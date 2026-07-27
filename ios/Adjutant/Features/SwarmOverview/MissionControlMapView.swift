@@ -31,7 +31,7 @@ struct MissionControlMapView: View {
     // MARK: Layout constants
     private let hMargin: CGFloat = 46
     private let topMargin: CGFloat = 92      // header band + beacon + tallest node
-    private let baseMargin: CGFloat = 64     // hub inset from the bottom (room for legend)
+    private let baseMargin: CGFloat = 72     // hub inset from the bottom (room for caption + legend)
     private let nodeRadius: CGFloat = 22
     private let ringWidth: CGFloat = 5
     private let hubRadius: CGFloat = 17
@@ -56,6 +56,8 @@ struct MissionControlMapView: View {
         Canvas { context, canvasSize in
             let hub = MissionControlLayout.hubAnchor(size: canvasSize, margin: baseMargin)
             let backlog = MissionControlLayout.backlogAnchor(size: canvasSize, margin: baseMargin)
+            // Non-overlapping y for the hub caption and the shape legend (adj-208.3.4.1b).
+            let bottom = MissionControlLayout.bottomBand(height: canvasSize.height, hubY: hub.y, hubRadius: hubRadius)
 
             drawBaseline(&context, size: canvasSize, hub: hub)
 
@@ -73,11 +75,13 @@ struct MissionControlMapView: View {
                     )
                 }
                 for epic in epics { drawStream(&context, from: hub, to: epic) }
-                for (i, project) in projects.enumerated() { drawProject(&context, project: project, at: epics[i]) }
-                drawLegend(&context, size: canvasSize)
+                for (i, project) in projects.enumerated() {
+                    drawProject(&context, project: project, at: epics[i], drawWidth: canvasSize.width)
+                }
+                drawLegend(&context, legendY: bottom.legendY)
             }
 
-            drawHub(&context, at: hub)
+            drawHub(&context, at: hub, captionY: bottom.captionY)
             drawBacklog(&context, at: backlog)
             drawHeader(&context, size: canvasSize)
         }
@@ -136,7 +140,7 @@ struct MissionControlMapView: View {
 
     // MARK: - Project cluster (node + ring + beacon + name + badge + agents)
 
-    private func drawProject(_ context: inout GraphicsContext, project: ProjectStreamRollup, at epic: CGPoint) {
+    private func drawProject(_ context: inout GraphicsContext, project: ProjectStreamRollup, at epic: CGPoint, drawWidth: CGFloat) {
         let percent100 = project.activeEpic?.completionPercent ?? 0
         let fraction = CGFloat(percent100 / 100)
 
@@ -163,22 +167,36 @@ struct MissionControlMapView: View {
         let beaconKey = MissionControlLayout.beaconKey(forStatus: project.status)
         drawBeacon(&context, at: CGPoint(x: epic.x, y: epic.y - nodeRadius - 12), key: beaconKey)
 
-        // Project name.
+        // Label cluster: project name + two-line remaining-work badge + agents. Kept narrow
+        // (two lines, not one) and horizontally CLAMPED as a group so the outermost projects'
+        // labels never clip off either screen edge (adj-208.3.4.1a; badge wording adj-208.3.3.6).
         let name = Text(project.name.uppercased())
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .foregroundColor(theme.textPrimary)
-        context.draw(name, at: CGPoint(x: epic.x, y: epic.y + nodeRadius + 13), anchor: .center)
 
-        // Remaining-work badge — scaled by backlog weight. "N epics · M open beads" (adj-208.3.3.6).
         let remaining = project.epicsRemaining + project.openBeadsRemaining
-        let scale = MissionControlLayout.remainingBadgeScale(remaining: remaining)
-        let badge = Text("\(project.epicsRemaining) EPICS · \(project.openBeadsRemaining) OPEN BEADS")
-            .font(.system(size: 9 * scale, weight: .medium, design: .monospaced))
-            .foregroundColor(CRTTheme.Brand.violetText)
-        context.draw(badge, at: CGPoint(x: epic.x, y: epic.y + nodeRadius + 29), anchor: .center)
+        let badgeScale = MissionControlLayout.remainingBadgeScale(remaining: remaining, maxScale: 1.15)
+        let badgeFont = Font.system(size: 8.5 * badgeScale, weight: .medium, design: .monospaced)
+        let epicsLine = Text("\(project.epicsRemaining) EPICS").font(badgeFont).foregroundColor(CRTTheme.Brand.violetText)
+        let beadsLine = Text("\(project.openBeadsRemaining) OPEN BEADS").font(badgeFont).foregroundColor(CRTTheme.Brand.violetText)
+
+        // Clamp the cluster to its widest measured line so nothing crosses the safe margins.
+        let nameResolved = context.resolve(name)
+        let beadsResolved = context.resolve(beadsLine)
+        let clusterWidth = max(
+            nameResolved.measure(in: CGSize(width: drawWidth, height: 40)).width,
+            beadsResolved.measure(in: CGSize(width: drawWidth, height: 40)).width
+        )
+        let labelX = MissionControlLayout.clampedCenterX(
+            desiredCenterX: epic.x, labelWidth: clusterWidth, drawWidth: drawWidth, margin: hMargin
+        )
+
+        context.draw(nameResolved, at: CGPoint(x: labelX, y: epic.y + nodeRadius + 13), anchor: .center)
+        context.draw(context.resolve(epicsLine), at: CGPoint(x: labelX, y: epic.y + nodeRadius + 27), anchor: .center)
+        context.draw(beadsResolved, at: CGPoint(x: labelX, y: epic.y + nodeRadius + 39), anchor: .center)
 
         // Agent markers — shape+color coded (adj-208.3.3.1), cap at 5 then "+N".
-        drawAgents(&context, agents: project.agents, centerX: epic.x, y: epic.y + nodeRadius + 46)
+        drawAgents(&context, agents: project.agents, centerX: labelX, y: epic.y + nodeRadius + 54)
     }
 
     // MARK: - Status beacon shapes (adj-208.3.3.1)
@@ -250,8 +268,7 @@ struct MissionControlMapView: View {
 
     // MARK: - Legend (adj-208.3.3.1 — names the shapes so they aren't color-only)
 
-    private func drawLegend(_ context: inout GraphicsContext, size: CGSize) {
-        let y = size.height - baseMargin + 30
+    private func drawLegend(_ context: inout GraphicsContext, legendY y: CGFloat) {
         var x = hMargin
         for (key, label) in [(MissionControlLayout.BeaconKey.green, "ON TRACK"),
                              (.amber, "NEEDS INPUT"),
@@ -267,7 +284,7 @@ struct MissionControlMapView: View {
 
     // MARK: - Hub
 
-    private func drawHub(_ context: inout GraphicsContext, at hub: CGPoint) {
+    private func drawHub(_ context: inout GraphicsContext, at hub: CGPoint, captionY: CGFloat) {
         let rect = CGRect(x: hub.x - hubRadius, y: hub.y - hubRadius, width: hubRadius * 2, height: hubRadius * 2)
         context.fill(Path(ellipseIn: rect.insetBy(dx: -6, dy: -6)), with: .color(CRTTheme.Brand.violet.opacity(0.18)))  // halo
         context.fill(Path(ellipseIn: rect), with: .color(theme.background.elevated))
@@ -275,7 +292,7 @@ struct MissionControlMapView: View {
         context.draw(Text("ADJ").font(.system(size: 11, weight: .bold, design: .monospaced)).foregroundColor(CRTTheme.Brand.violetText),
                      at: hub, anchor: .center)
         context.draw(Text("COORDINATOR").font(.system(size: 8, weight: .medium, design: .monospaced)).foregroundColor(theme.dim),
-                     at: CGPoint(x: hub.x, y: hub.y + hubRadius + 11), anchor: .center)
+                     at: CGPoint(x: hub.x, y: captionY), anchor: .center)
     }
 
     // MARK: - Backlog reservoir

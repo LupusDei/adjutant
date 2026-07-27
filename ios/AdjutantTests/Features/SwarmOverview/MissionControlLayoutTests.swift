@@ -196,4 +196,48 @@ final class MissionControlLayoutTests: XCTestCase {
         XCTAssertEqual(over, 144, accuracy: eps, "Over-100% clamps to the short end")
         XCTAssertEqual(under, 80, accuracy: eps, "Negative clamps to the tall end")
     }
+
+    // MARK: - clampedCenterX (adj-208.3.4.1a — badges must not clip at either edge)
+
+    func testClampedCenterKeepsLeftmostLabelOnScreen() {
+        // Leftmost node sits AT the margin; a 120-wide badge centered there would spill to x=-14.
+        let width: CGFloat = 402, margin: CGFloat = 46, labelWidth: CGFloat = 120
+        let c = MissionControlLayout.clampedCenterX(desiredCenterX: margin, labelWidth: labelWidth, drawWidth: width, margin: margin)
+        XCTAssertGreaterThanOrEqual(c - labelWidth / 2, margin - eps, "Left edge must not cross the safe margin")
+        XCTAssertLessThanOrEqual(c + labelWidth / 2, width - margin + eps)
+    }
+
+    func testClampedCenterKeepsRightmostLabelOnScreen() {
+        let width: CGFloat = 402, margin: CGFloat = 46, labelWidth: CGFloat = 120
+        let c = MissionControlLayout.clampedCenterX(desiredCenterX: width - margin, labelWidth: labelWidth, drawWidth: width, margin: margin)
+        XCTAssertLessThanOrEqual(c + labelWidth / 2, width - margin + eps, "Right edge must not cross the safe margin")
+        XCTAssertGreaterThanOrEqual(c - labelWidth / 2, margin - eps)
+    }
+
+    func testClampedCenterLeavesCenteredLabelUntouched() {
+        // A label that already fits centered is not moved.
+        let c = MissionControlLayout.clampedCenterX(desiredCenterX: 201, labelWidth: 80, drawWidth: 402, margin: 46)
+        XCTAssertEqual(c, 201, accuracy: eps)
+    }
+
+    func testClampedCenterCentersOverwideLabel() {
+        // Label wider than the safe span can't fit either way → centered (caller shrinks text).
+        let c = MissionControlLayout.clampedCenterX(desiredCenterX: 46, labelWidth: 400, drawWidth: 402, margin: 46)
+        XCTAssertEqual(c, 201, accuracy: eps, "Overwide label is centered")
+    }
+
+    // MARK: - bottomBand (adj-208.3.4.1b — caption and legend must not overlap)
+
+    func testBottomBandLegendIsBelowCaptionAtPortraitHeight() {
+        let b = MissionControlLayout.bottomBand(height: 720, hubY: 646, hubRadius: 17)
+        XCTAssertGreaterThan(b.legendY, b.captionY, "Legend sits below the hub caption")
+        XCTAssertGreaterThanOrEqual(b.legendY - b.captionY, 20 - eps, "At least the minimum separation")
+    }
+
+    func testBottomBandSeparationHoldsAtShortHeight() {
+        // Even when height is small enough that height-bottomInset would collide, separation is enforced.
+        let b = MissionControlLayout.bottomBand(height: 480, hubY: 470, hubRadius: 17)
+        XCTAssertGreaterThanOrEqual(b.legendY - b.captionY, 20 - eps,
+                                    "Minimum separation holds regardless of height")
+    }
 }
