@@ -1,35 +1,29 @@
 /**
- * Unit tests for the Mission Control coordination rollup service (adj-208.1.2).
+ * Unit tests for the Mission Control coordination rollup service
+ * (adj-208.1.2 / .4.1).
  *
- * Rule 1 (real data shapes): the per-project bead/epic inputs are built from REAL
- * `bd` output captured in `tests/fixtures/overview/bd-shapes.json` and run through
- * the SAME reused transforms the production service composes (`transformBead`,
- * `computeEpicProgressFromDeps`). Nothing is hand-crafted from the TS
- * `EpicProgress` / `BeadInfo` interfaces — the fixtures carry real CLI fields
- * (`owner`, `created_by`, `dependency_count`, `dependency_type`) the TS types do
- * not even declare.
+ * Rule 1 (real data shapes): each project's bead snapshot is REAL
+ * `bd list --all --json` output captured in `tests/fixtures/overview/bd-shapes.json`
+ * and fed to the service via the injected `fetchProjectBeads`. Epic completion is
+ * derived through the reused `computeEpicProgressFromDeps` (list-tuple branch) —
+ * the exact path production now uses (adj-208.4.1 removed the `bd show` fan-out).
+ * Fixtures carry real CLI fields (owner, created_by, metadata, dependency_count)
+ * the TS types don't declare — grounded in the CLI, not the interfaces.
  *
- * adj-208.1.2.1: epic `dependencies` use the REAL `bd show <epic> --json` shape
- * (full child issue records with `dependency_type` + embedded `status`) — the
- * shape production's `computeEpicProgress` actually feeds in. The earlier fixture
- * fabricated `bd list` edge tuples ({issue_id, depends_on_id}), which is what let
- * this test pass while production read completion=0 (it masked adj-208.1.4). With
- * the real show shape, this test now genuinely fails against the pre-1.4 code.
+ * Also covers the adj-208.4.1 resilience guarantees: a slow project degrades and
+ * never blocks the others, and a warm cache serves without re-hitting bd.
  */
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createCoordinationOverviewService } from "../../src/services/coordination-overview-service.js";
+import {
+  createCoordinationOverviewService,
+  rollupFromBeads,
+} from "../../src/services/coordination-overview-service.js";
 import type { CoordinationOverviewDeps } from "../../src/services/coordination-overview-service.js";
-import { transformBead } from "../../src/services/beads/index.js";
-import { computeEpicProgressFromDeps } from "../../src/services/beads/beads-dependency.js";
-import type {
-  BeadInfo,
-  EpicProgress,
-  ProjectBeadsOverview,
-} from "../../src/services/beads/index.js";
+import type { BeadsIssue } from "../../src/services/bd-client.js";
 import type { Project } from "../../src/services/projects-service.js";
 import type { CrewMember, AgentQuestion } from "../../src/types/index.js";
 import { ok, fail } from "../../src/types/service-result.js";
@@ -37,74 +31,27 @@ import { ok, fail } from "../../src/types/service-result.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// Fixture loading — REAL bd shapes → domain objects via reused transforms
+// Fixtures — REAL `bd list --all` snapshots per project
 // ---------------------------------------------------------------------------
 
-/**
- * A dependency as emitted by `bd show <epic> --json`: a full child issue record
- * with an added `dependency_type` and its own embedded `status`. This is the
- * shape production feeds `computeEpicProgressFromDeps` (via `computeEpicProgress`),
- * NOT the `bd list` edge tuple {issue_id, depends_on_id, type}.
- */
-interface RawShowDep {
-  id: string;
-  status: string;
-  dependency_type: string;
-  [k: string]: unknown;
-}
-interface RawIssue {
-  id: string;
-  status: string;
-  issue_type: string;
-  dependencies?: RawShowDep[];
-  [k: string]: unknown;
-}
 interface RawScenario {
-  epics: RawIssue[];
-  allBeads: RawIssue[];
-  openBeads: RawIssue[];
-  inProgressBeads: RawIssue[];
+  beads: BeadsIssue[];
 }
-
 const FIXTURES = JSON.parse(
-  readFileSync(
-    resolve(__dirname, "../fixtures/overview/bd-shapes.json"),
-    "utf-8"
-  )
+  readFileSync(resolve(__dirname, "../fixtures/overview/bd-shapes.json"), "utf-8")
 ) as Record<string, RawScenario>;
 
-/** Build EpicProgress[] exactly as the reused `computeEpicProgress` would. */
-function epicsFor(scenario: string): EpicProgress[] {
-  const fx = FIXTURES[scenario]!;
-  const statusMap = new Map<string, string>();
-  for (const b of fx.allBeads) statusMap.set(b.id, b.status);
-  for (const e of fx.epics) statusMap.set(e.id, e.status);
-  return fx.epics.map((e) =>
-    // Cast: fixtures are real CLI shapes richer than BeadsIssue; the reused
-    // function only reads id/title/status/assignee + the passed deps.
-    computeEpicProgressFromDeps(
-      e as never,
-      e.dependencies ?? [],
-      statusMap
-    )
-  );
-}
-
-/** Build ProjectBeadsOverview exactly as the reused `getProjectOverview` would. */
-function overviewFor(scenario: string): ProjectBeadsOverview {
-  const fx = FIXTURES[scenario]!;
-  const open: BeadInfo[] = fx.openBeads.map((b) => transformBead(b as never, "project"));
-  const inProgress: BeadInfo[] = fx.inProgressBeads.map((b) =>
-    transformBead(b as never, "project")
-  );
-  return { open, inProgress, recentlyClosed: [] };
+function beadsFor(scenario: string): BeadsIssue[] {
+  return FIXTURES[scenario]!.beads;
 }
 
 // ---------------------------------------------------------------------------
-// Test factories
+// Factories
 // ---------------------------------------------------------------------------
 
-function project(overrides: Partial<Project> & { id: string; name: string; path: string }): Project {
+function project(
+  overrides: Partial<Project> & { id: string; name: string; path: string }
+): Project {
   return {
     mode: "swarm",
     sessions: [],
@@ -116,13 +63,7 @@ function project(overrides: Partial<Project> & { id: string; name: string; path:
 }
 
 function agent(id: string, projectName: string, status: string): CrewMember {
-  return {
-    id,
-    name: id,
-    type: "crew",
-    project: projectName,
-    status: status as CrewMember["status"],
-  };
+  return { id, name: id, type: "crew", project: projectName, status: status as CrewMember["status"] };
 }
 
 function question(projectId: string): AgentQuestion {
@@ -137,7 +78,7 @@ function question(projectId: string): AgentQuestion {
   };
 }
 
-/** Builds DI deps wiring fixture scenarios by project path. */
+/** Builds DI deps; `scenarioByPath` maps a project path to a fixture scenario. */
 function makeDeps(config: {
   projects: Project[];
   scenarioByPath?: Record<string, string>;
@@ -148,13 +89,9 @@ function makeDeps(config: {
   const scenarioByPath = config.scenarioByPath ?? {};
   return {
     listProjects: vi.fn(() => ok(config.projects)),
-    getProjectOverview: vi.fn(async (path: string) => {
+    fetchProjectBeads: vi.fn(async (path: string) => {
       const s = scenarioByPath[path];
-      return s ? ok(overviewFor(s)) : ok({ open: [], inProgress: [], recentlyClosed: [] });
-    }),
-    computeEpicProgress: vi.fn(async (path: string) => {
-      const s = scenarioByPath[path];
-      return s ? ok(epicsFor(s)) : ok([]);
+      return s ? ok(beadsFor(s)) : ok([] as BeadsIssue[]);
     }),
     getAgents: vi.fn(async () => ok(config.agents ?? [])),
     listOpenQuestions: vi.fn(
@@ -165,195 +102,243 @@ function makeDeps(config: {
 }
 
 // ---------------------------------------------------------------------------
-// Tests
+// rollupFromBeads (pure)
 // ---------------------------------------------------------------------------
 
-describe("CoordinationOverviewService", () => {
-  describe("happy path — a project with an active epic", () => {
-    it("should roll up active epic, remaining work, agents, and on_track status", async () => {
-      const deps = makeDeps({
-        projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
-        scenarioByPath: { "/alpha": "alpha" },
-        agents: [agent("A1", "alpha", "working"), agent("A2", "alpha", "idle")],
-      });
-
-      const svc = createCoordinationOverviewService(deps);
-      const result = await svc.getOverviewProjects();
-
-      expect(result.projects).toHaveLength(1);
-      const p = result.projects[0]!;
-      expect(p.projectId).toBe("alpha-id");
-      expect(p.name).toBe("alpha");
-      // alpha-1 in_progress: 2 of 3 children closed → 67% (fraction 0.667 normalized).
-      expect(p.activeEpic).toEqual({
-        id: "alpha-1",
-        title: "Active epic — auth revamp",
-        completionPercent: 67,
-        closedChildren: 2,
-        totalChildren: 3,
-      });
-      expect(p.epicsRemaining).toBe(1); // alpha-2 is open/not-started
-      expect(p.openBeadsRemaining).toBe(3); // three open non-epic beads
-      expect(p.agents).toEqual([
-        { id: "A1", status: "working" },
-        { id: "A2", status: "idle" },
-      ]);
-      expect(p.status).toBe("on_track");
+describe("rollupFromBeads", () => {
+  it("should derive active epic + completion from bd list dependency edges", () => {
+    const r = rollupFromBeads(beadsFor("alpha"));
+    expect(r.activeEpic).toEqual({
+      id: "alpha-1",
+      title: "Active epic — auth revamp",
+      completionPercent: 67, // 2 of 3 children closed
+      closedChildren: 2,
+      totalChildren: 3,
     });
+    expect(r.epicsRemaining).toBe(1); // alpha-2 open
+    expect(r.openBeadsRemaining).toBe(3); // alpha-2.1, alpha-2.2, alpha-3
+    expect(r.hasBlocked).toBe(false);
   });
 
-  describe("no active epic", () => {
-    it("should set activeEpic null and count all open epics as remaining", async () => {
-      const deps = makeDeps({
-        projects: [project({ id: "delta-id", name: "delta", path: "/delta" })],
-        scenarioByPath: { "/delta": "delta" },
-      });
-
-      const svc = createCoordinationOverviewService(deps);
-      const { projects, totals } = await svc.getOverviewProjects();
-
-      const p = projects[0]!;
-      expect(p.activeEpic).toBeNull();
-      expect(p.epicsRemaining).toBe(2); // delta-1 + delta-2, both open
-      expect(p.openBeadsRemaining).toBe(1);
-      expect(p.status).toBe("on_track");
-      // No active epic anywhere → portfolio completion is 0, not NaN.
-      expect(totals.portfolioCompletionPercent).toBe(0);
-    });
+  it("should flag blocked and compute a partially-complete active epic", () => {
+    const r = rollupFromBeads(beadsFor("beta"));
+    expect(r.hasBlocked).toBe(true);
+    expect(r.activeEpic?.id).toBe("beta-1");
+    expect(r.activeEpic?.completionPercent).toBe(50); // 1 of 2
   });
 
-  describe("status derivation", () => {
-    it("should derive 'blocked' when any bead in the project is blocked", async () => {
-      const deps = makeDeps({
-        projects: [project({ id: "beta-id", name: "beta", path: "/beta" })],
-        scenarioByPath: { "/beta": "beta" },
-        // Even with an open question, blocked wins (precedence).
-        questionsByProjectId: { "beta-id": [question("beta-id")] },
-      });
+  it("should return a null active epic when no epic is in progress", () => {
+    const r = rollupFromBeads(beadsFor("delta"));
+    expect(r.activeEpic).toBeNull();
+    expect(r.epicsRemaining).toBe(2);
+    expect(r.openBeadsRemaining).toBe(1);
+  });
+});
 
-      const svc = createCoordinationOverviewService(deps);
-      const p = (await svc.getOverviewProjects()).projects[0]!;
+// ---------------------------------------------------------------------------
+// getOverviewProjects
+// ---------------------------------------------------------------------------
 
-      expect(p.status).toBe("blocked");
-      // Active epic is still computed even when blocked (1 of 2 closed → 50%).
-      expect(p.activeEpic?.id).toBe("beta-1");
-      expect(p.activeEpic?.completionPercent).toBe(50);
+describe("CoordinationOverviewService.getOverviewProjects", () => {
+  it("should roll up a healthy project (active epic, agents, on_track, not degraded)", async () => {
+    const deps = makeDeps({
+      projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
+      scenarioByPath: { "/alpha": "alpha" },
+      agents: [agent("A1", "alpha", "working"), agent("A2", "alpha", "idle")],
     });
+    const p = (await createCoordinationOverviewService(deps).getOverviewProjects()).projects[0]!;
 
-    it("should derive 'needs_input' when an open question exists and nothing is blocked", async () => {
-      const deps = makeDeps({
-        projects: [project({ id: "gamma-id", name: "gamma", path: "/gamma" })],
-        scenarioByPath: { "/gamma": "gamma" },
-        questionsByProjectId: { "gamma-id": [question("gamma-id")] },
-      });
-
-      const svc = createCoordinationOverviewService(deps);
-      const p = (await svc.getOverviewProjects()).projects[0]!;
-
-      expect(p.status).toBe("needs_input");
-    });
+    expect(p.projectId).toBe("alpha-id");
+    expect(p.activeEpic?.id).toBe("alpha-1");
+    expect(p.activeEpic?.completionPercent).toBe(67);
+    expect(p.epicsRemaining).toBe(1);
+    expect(p.openBeadsRemaining).toBe(3);
+    expect(p.agents).toEqual([
+      { id: "A1", status: "working" },
+      { id: "A2", status: "idle" },
+    ]);
+    expect(p.status).toBe("on_track");
+    expect(p.degraded).toBe(false);
   });
 
-  describe("empty project (no beads)", () => {
-    it("should return zeroed rollup and NOT query bd for a project without beads", async () => {
-      const deps = makeDeps({
-        projects: [
-          project({ id: "eps-id", name: "epsilon", path: "/epsilon", hasBeads: false }),
-        ],
-      });
-
-      const svc = createCoordinationOverviewService(deps);
-      const p = (await svc.getOverviewProjects()).projects[0]!;
-
-      expect(p.activeEpic).toBeNull();
-      expect(p.epicsRemaining).toBe(0);
-      expect(p.openBeadsRemaining).toBe(0);
-      expect(p.agents).toEqual([]);
-      expect(p.status).toBe("on_track");
-      // Must NOT spend a bd call on a project with no beads database.
-      expect(deps.getProjectOverview).not.toHaveBeenCalled();
-      expect(deps.computeEpicProgress).not.toHaveBeenCalled();
+  it("should derive 'blocked' (precedence over an open question)", async () => {
+    const deps = makeDeps({
+      projects: [project({ id: "beta-id", name: "beta", path: "/beta" })],
+      scenarioByPath: { "/beta": "beta" },
+      questionsByProjectId: { "beta-id": [question("beta-id")] },
     });
+    const p = (await createCoordinationOverviewService(deps).getOverviewProjects()).projects[0]!;
+    expect(p.status).toBe("blocked");
   });
 
-  describe("portfolio totals across multiple projects", () => {
-    it("should aggregate counts, beacons, active agents, and mean completion", async () => {
-      const deps = makeDeps({
-        projects: [
-          project({ id: "alpha-id", name: "alpha", path: "/alpha" }),
-          project({ id: "beta-id", name: "beta", path: "/beta" }),
-          project({ id: "gamma-id", name: "gamma", path: "/gamma" }),
-          project({ id: "delta-id", name: "delta", path: "/delta" }),
-          project({ id: "eps-id", name: "epsilon", path: "/epsilon", hasBeads: false }),
-        ],
-        scenarioByPath: {
-          "/alpha": "alpha",
-          "/beta": "beta",
-          "/gamma": "gamma",
-          "/delta": "delta",
-        },
-        agents: [
-          agent("A1", "alpha", "working"),
-          agent("A2", "alpha", "idle"),
-          agent("B1", "beta", "working"),
-          agent("G1", "gamma", "working"),
-          agent("Z1", "alpha", "offline"), // offline: excluded from agentsActive
-        ],
-        questionsByProjectId: { "gamma-id": [question("gamma-id")] },
-      });
-
-      const svc = createCoordinationOverviewService(deps);
-      const { projects, totals } = await svc.getOverviewProjects();
-
-      expect(projects).toHaveLength(5);
-      expect(totals.projects).toBe(5);
-      // Non-offline agents: A1, A2, B1, G1 = 4 (Z1 offline excluded).
-      expect(totals.agentsActive).toBe(4);
-      // epicsRemaining: alpha(1) + delta(2) = 3.
-      expect(totals.epicsRemaining).toBe(3);
-      // openBeadsRemaining: alpha(3) + gamma(1) + delta(1) = 5.
-      expect(totals.openBeadsRemaining).toBe(5);
-      expect(totals.blocked).toBe(1); // beta
-      expect(totals.needsInput).toBe(1); // gamma
-      // Active epics: alpha(67) + beta(50) + gamma(0) → mean 39 (delta/epsilon none).
-      expect(totals.portfolioCompletionPercent).toBe(39);
+  it("should derive 'needs_input' when a question is open and nothing is blocked", async () => {
+    const deps = makeDeps({
+      projects: [project({ id: "gamma-id", name: "gamma", path: "/gamma" })],
+      scenarioByPath: { "/gamma": "gamma" },
+      questionsByProjectId: { "gamma-id": [question("gamma-id")] },
     });
+    const p = (await createCoordinationOverviewService(deps).getOverviewProjects()).projects[0]!;
+    expect(p.status).toBe("needs_input");
+  });
+
+  it("should zero out a project with no beads and NOT fetch bd", async () => {
+    const deps = makeDeps({
+      projects: [project({ id: "eps-id", name: "epsilon", path: "/epsilon", hasBeads: false })],
+    });
+    const p = (await createCoordinationOverviewService(deps).getOverviewProjects()).projects[0]!;
+    expect(p.activeEpic).toBeNull();
+    expect(p.openBeadsRemaining).toBe(0);
+    expect(p.status).toBe("on_track");
+    expect(p.degraded).toBe(false);
+    expect(deps.fetchProjectBeads).not.toHaveBeenCalled();
+  });
+
+  it("should aggregate portfolio totals across projects", async () => {
+    const deps = makeDeps({
+      projects: [
+        project({ id: "alpha-id", name: "alpha", path: "/alpha" }),
+        project({ id: "beta-id", name: "beta", path: "/beta" }),
+        project({ id: "gamma-id", name: "gamma", path: "/gamma" }),
+        project({ id: "delta-id", name: "delta", path: "/delta" }),
+        project({ id: "eps-id", name: "epsilon", path: "/epsilon", hasBeads: false }),
+      ],
+      scenarioByPath: { "/alpha": "alpha", "/beta": "beta", "/gamma": "gamma", "/delta": "delta" },
+      agents: [
+        agent("A1", "alpha", "working"),
+        agent("A2", "alpha", "idle"),
+        agent("B1", "beta", "working"),
+        agent("G1", "gamma", "working"),
+        agent("Z1", "alpha", "offline"),
+      ],
+      questionsByProjectId: { "gamma-id": [question("gamma-id")] },
+    });
+    const { projects, totals } = await createCoordinationOverviewService(deps).getOverviewProjects();
+
+    expect(projects).toHaveLength(5);
+    expect(totals.projects).toBe(5);
+    expect(totals.agentsActive).toBe(4); // Z1 offline excluded
+    expect(totals.epicsRemaining).toBe(3); // alpha 1 + delta 2
+    expect(totals.openBeadsRemaining).toBe(5); // alpha 3 + gamma 1 + delta 1
+    expect(totals.blocked).toBe(1);
+    expect(totals.needsInput).toBe(1);
+    expect(totals.portfolioCompletionPercent).toBe(39); // mean(67,50,0)
   });
 
   describe("resilience", () => {
     it("should throw when listProjects fails (route surfaces a 500)", async () => {
       const deps = makeDeps({ projects: [] });
       deps.listProjects = vi.fn(() => fail("DB_ERROR", "projects unavailable"));
-      const svc = createCoordinationOverviewService(deps);
-      await expect(svc.getOverviewProjects()).rejects.toThrow();
+      await expect(
+        createCoordinationOverviewService(deps).getOverviewProjects()
+      ).rejects.toThrow();
     });
 
-    it("should degrade a project to empty bead data when its bd query fails", async () => {
+    it("should degrade a project whose bd fetch fails, keeping it in the response", async () => {
       const deps = makeDeps({
         projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
         scenarioByPath: { "/alpha": "alpha" },
       });
-      deps.getProjectOverview = vi.fn(async () => fail("CLI_ERROR", "bd timeout"));
-
-      const svc = createCoordinationOverviewService(deps);
-      const p = (await svc.getOverviewProjects()).projects[0]!;
-
-      expect(p.openBeadsRemaining).toBe(0); // degraded, not thrown
+      deps.fetchProjectBeads = vi.fn(async () => fail("CLI_ERROR", "bd exploded"));
+      const p = (await createCoordinationOverviewService(deps).getOverviewProjects()).projects[0]!;
+      expect(p.degraded).toBe(true);
+      expect(p.openBeadsRemaining).toBe(0);
+      expect(p.activeEpic).toBeNull();
       expect(p.status).toBe("on_track");
     });
 
-    it("should not crash when getAgents fails (agents render empty)", async () => {
+    it("should fall back to empty agents when getAgents fails", async () => {
       const deps = makeDeps({
         projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
         scenarioByPath: { "/alpha": "alpha" },
       });
       deps.getAgents = vi.fn(async () => fail("TMUX_ERROR", "no tmux"));
-
-      const svc = createCoordinationOverviewService(deps);
-      const { projects, totals } = await svc.getOverviewProjects();
-
+      const { projects, totals } = await createCoordinationOverviewService(deps).getOverviewProjects();
       expect(projects[0]!.agents).toEqual([]);
       expect(totals.agentsActive).toBe(0);
+    });
+  });
+
+  describe("performance guarantees (adj-208.4.1)", () => {
+    it("should return promptly with the slow project degraded and the others intact", async () => {
+      const deps = makeDeps({
+        projects: [
+          project({ id: "alpha-id", name: "alpha", path: "/alpha" }),
+          project({ id: "slow-id", name: "slow", path: "/slow" }),
+        ],
+        scenarioByPath: { "/alpha": "alpha" },
+      });
+      // /slow's bead fetch takes far longer than the per-project timeout.
+      deps.fetchProjectBeads = vi.fn(async (path: string) => {
+        if (path === "/slow") {
+          await new Promise<void>((r) => {
+            setTimeout(r, 500);
+          });
+          return ok(beadsFor("alpha"));
+        }
+        return ok(beadsFor("alpha"));
+      });
+
+      const svc = createCoordinationOverviewService(deps, {
+        perProjectTimeoutMs: 40,
+        hardTimeoutMs: 200,
+      });
+
+      const start = Date.now();
+      const { projects } = await svc.getOverviewProjects();
+      const elapsed = Date.now() - start;
+
+      // Must NOT wait for the 500ms slow project.
+      expect(elapsed).toBeLessThan(300);
+
+      const fast = projects.find((p) => p.projectId === "alpha-id")!;
+      const slow = projects.find((p) => p.projectId === "slow-id")!;
+      expect(fast.degraded).toBe(false);
+      expect(fast.activeEpic?.id).toBe("alpha-1");
+      expect(slow.degraded).toBe(true);
+      expect(slow.activeEpic).toBeNull();
+    });
+
+    it("should serve a warm cache without re-fetching bd within the TTL", async () => {
+      const fetchSpy = vi.fn(async () => ok(beadsFor("alpha")));
+      const deps = makeDeps({
+        projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
+        overrides: { fetchProjectBeads: fetchSpy },
+      });
+      const svc = createCoordinationOverviewService(deps, { cacheTtlMs: 30_000 });
+
+      await svc.getOverviewProjects(); // cold — 1 fetch
+      const second = await svc.getOverviewProjects(); // warm — cache hit, 0 fetch
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(second.projects[0]!.activeEpic?.id).toBe("alpha-1");
+      expect(second.projects[0]!.degraded).toBe(false);
+    });
+
+    it("should serve stale instantly and refresh in the background once the TTL expires", async () => {
+      let clock = 1_000;
+      const fetchSpy = vi.fn(async () => ok(beadsFor("alpha")));
+      const deps = makeDeps({
+        projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
+        overrides: { fetchProjectBeads: fetchSpy },
+      });
+      const svc = createCoordinationOverviewService(deps, {
+        cacheTtlMs: 100,
+        now: () => clock,
+      });
+
+      await svc.getOverviewProjects(); // cold — fetch #1
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      clock = 1_250; // age 250 > TTL 100 → stale
+      const stale = await svc.getOverviewProjects();
+      // Stale-while-revalidate: instant, real (not degraded) data served from cache.
+      expect(stale.projects[0]!.activeEpic?.id).toBe("alpha-1");
+      expect(stale.projects[0]!.degraded).toBe(false);
+
+      // ...and a background refresh was kicked off.
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+      });
     });
   });
 });

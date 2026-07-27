@@ -121,6 +121,7 @@ export {
   getProjectOverview,
   computeEpicProgress,
   getRecentlyCompletedEpics,
+  listAllProjectBeads,
 } from "./beads-project.js";
 
 // ============================================================================

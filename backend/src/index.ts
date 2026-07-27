@@ -6,7 +6,7 @@ import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
-import { startPrefixMapRefreshScheduler, getProjectOverview, computeEpicProgress } from "./services/beads/index.js";
+import { startPrefixMapRefreshScheduler, listAllProjectBeads } from "./services/beads/index.js";
 import { createCoordinationOverviewService } from "./services/coordination-overview-service.js";
 import { startUploadRetentionScheduler } from "./services/upload-retention.js";
 import { initWebSocketServer, setConversationStore, wsBroadcast } from "./services/ws-server.js";
@@ -190,13 +190,14 @@ const questionService = createQuestionService({
   },
 });
 
-// adj-208 — Mission Control portfolio rollup. Composes the EXISTING read paths
-// (projects, beads overview/epic-progress, agents, question store) so `GET
-// /api/overview/projects` adds no second bd access path.
+// adj-208 / adj-208.4.1 — Mission Control portfolio rollup. ONE `bd list --all`
+// per project (with a short timeout so a cold dolt can't wedge the bd mutex);
+// the service caches per-project with stale-while-revalidate + hard timeouts so
+// `GET /api/overview/projects` always responds fast. No `bd show` fan-out.
 const coordinationOverviewService = createCoordinationOverviewService({
   listProjects: () => listProjects(),
-  getProjectOverview: (projectPath) => getProjectOverview(projectPath),
-  computeEpicProgress: (projectPath) => computeEpicProgress(projectPath),
+  fetchProjectBeads: (projectPath) =>
+    listAllProjectBeads(projectPath, { timeoutMs: 2500 }),
   getAgents: () => getAgents(),
   listOpenQuestions: (projectId) =>
     questionStore.listQuestions({ projectId, status: "open" }),
