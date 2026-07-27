@@ -257,6 +257,30 @@ public enum CRTTheme {
         public static let info = Color(red: 0.0, green: 0.667, blue: 1.0)           // #00AAFF
     }
 
+    /// Brand accent palette for Mission Control (adj-208).
+    ///
+    /// The Mission Control map is a cross-project coordination surface, so it uses a fixed
+    /// brand identity rather than any single theme's `primary` — the portfolio reads the same
+    /// regardless of the active `ColorTheme`. Tuned for the dark map background (starcraft/glass).
+    ///
+    /// - `violet` / `cyan` are the canonical brand hues for FILLS, STROKES, and rings. They meet
+    ///   the WCAG-AA 3:1 non-text UI-component threshold against the dark panel background.
+    /// - `violetText` / `cyanText` are lightened variants that clear the WCAG-AA 4.5:1 text
+    ///   threshold on dark backgrounds — use these for labels/small glyphs, not the base hues.
+    public enum Brand {
+        /// Primary brand accent — violet (#A118C4). Fills / strokes / rings.
+        public static let violet = Color(red: 0.631, green: 0.094, blue: 0.769)
+
+        /// Secondary brand accent — cyan (#1FB6D6). Fills / strokes / rings.
+        public static let cyan = Color(red: 0.122, green: 0.714, blue: 0.839)
+
+        /// AA-legible violet (#CA6BE5, ≥4.5:1 on dark) — text / small foreground glyphs.
+        public static let violetText = Color(red: 0.792, green: 0.420, blue: 0.898)
+
+        /// AA-legible cyan (#67D3EA, ≥4.5:1 on dark) — text / small foreground glyphs.
+        public static let cyanText = Color(red: 0.404, green: 0.827, blue: 0.918)
+    }
+
     /// Priority colors for badges and indicators
     public enum Priority {
         /// P0 - Urgent (red)
