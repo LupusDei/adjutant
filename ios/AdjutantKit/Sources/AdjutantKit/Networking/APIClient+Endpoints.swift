@@ -274,6 +274,18 @@ extension APIClient {
     public func getGlobalOverview() async throws -> GlobalOverviewResponse {
         return try await requestWithEnvelope(.get, path: "/overview")
     }
+
+    /// Get the Mission Control portfolio rollup (epic adj-208, US2).
+    ///
+    /// Maps to `GET /api/overview/projects`. Returns, per project, the active epic +
+    /// completion, remaining open epics/beads, assigned agents, and a coordination
+    /// status, plus portfolio-wide totals — enough to render the whole map in one request.
+    ///
+    /// - Returns: The decoded ``OverviewProjectsResponse`` from the standard envelope.
+    /// - Throws: ``APIClientError`` if the request fails or the server returns an error envelope.
+    public func getOverviewProjects() async throws -> OverviewProjectsResponse {
+        return try await requestWithEnvelope(.get, path: "/overview/projects")
+    }
 }
 
 // MARK: - Beads Endpoints
