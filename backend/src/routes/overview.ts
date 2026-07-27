@@ -19,7 +19,10 @@ import type { BeadInfo, EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
 import type { CoordinationOverviewService } from "../services/coordination-overview-service.js";
-import { OverviewProjectsResponseSchema } from "../types/overview-projects.js";
+import {
+  OverviewProjectsResponseSchema,
+  OverviewProjectsQuerySchema,
+} from "../types/overview-projects.js";
 import { success, internalError, serviceUnavailable } from "../utils/responses.js";
 
 /**
@@ -45,14 +48,23 @@ export function createOverviewRouter(
    * Thin adapter: delegate to the service, validate the payload against the
    * response schema, and return the standard envelope. No business logic here.
    */
-  router.get("/projects", async (_req, res) => {
+  router.get("/projects", async (req, res) => {
     if (!coordinationService) {
       return res
         .status(503)
         .json(serviceUnavailable("Coordination overview is not available"));
     }
     try {
-      const rollup = await coordinationService.getOverviewProjects();
+      // adj-209.1.3 — optional `?projectIds=a,b,c` allow-list. Default-safe: a
+      // malformed/absent value yields no filter (never a 400), matching the
+      // schema's tolerant parse.
+      const parsedQuery = OverviewProjectsQuerySchema.safeParse(req.query);
+      const projectIds = parsedQuery.success
+        ? parsedQuery.data.projectIds
+        : undefined;
+      const rollup = await coordinationService.getOverviewProjects(
+        projectIds ? { projectIds } : undefined
+      );
       const parsed = OverviewProjectsResponseSchema.safeParse(rollup);
       if (!parsed.success) {
         return res

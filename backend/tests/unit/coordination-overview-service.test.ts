@@ -416,6 +416,68 @@ describe("CoordinationOverviewService.getOverviewProjects", () => {
     });
   });
 
+  describe("projectIds filter (adj-209.1.3)", () => {
+    it("should roll up ONLY the requested projects and never fetch the rest", async () => {
+      const deps = makeDeps({
+        projects: [
+          project({ id: "alpha-id", name: "alpha", path: "/alpha" }),
+          project({ id: "beta-id", name: "beta", path: "/beta" }),
+          project({ id: "gamma-id", name: "gamma", path: "/gamma" }),
+        ],
+        scenarioByPath: { "/alpha": "alpha", "/beta": "beta", "/gamma": "gamma" },
+      });
+      const start = Date.now();
+      const { projects, totals } = await createCoordinationOverviewService(
+        deps
+      ).getOverviewProjects({ projectIds: ["alpha-id", "gamma-id"] });
+
+      expect(projects.map((p) => p.projectId).sort()).toEqual(["alpha-id", "gamma-id"]);
+      expect(totals.projects).toBe(2);
+      // A small selection is the fast path: unrequested projects are never fetched.
+      expect(deps.fetchProjectBeads).toHaveBeenCalledWith("/alpha");
+      expect(deps.fetchProjectBeads).toHaveBeenCalledWith("/gamma");
+      expect(deps.fetchProjectBeads).not.toHaveBeenCalledWith("/beta");
+      expect(Date.now() - start).toBeLessThan(1000);
+    });
+
+    it("should ignore unknown project ids (no error, no existence leak)", async () => {
+      const deps = makeDeps({
+        projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
+        scenarioByPath: { "/alpha": "alpha" },
+      });
+      const { projects } = await createCoordinationOverviewService(
+        deps
+      ).getOverviewProjects({ projectIds: ["alpha-id", "does-not-exist"] });
+      expect(projects.map((p) => p.projectId)).toEqual(["alpha-id"]);
+    });
+
+    it("should return no projects when every requested id is unknown", async () => {
+      const deps = makeDeps({
+        projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
+        scenarioByPath: { "/alpha": "alpha" },
+      });
+      const { projects, totals } = await createCoordinationOverviewService(
+        deps
+      ).getOverviewProjects({ projectIds: ["ghost"] });
+      expect(projects).toEqual([]);
+      expect(totals.projects).toBe(0);
+      expect(deps.fetchProjectBeads).not.toHaveBeenCalled();
+    });
+
+    it("should roll up ALL projects when projectIds is omitted or empty", async () => {
+      const deps = makeDeps({
+        projects: [
+          project({ id: "alpha-id", name: "alpha", path: "/alpha" }),
+          project({ id: "beta-id", name: "beta", path: "/beta" }),
+        ],
+        scenarioByPath: { "/alpha": "alpha", "/beta": "beta" },
+      });
+      const svc = createCoordinationOverviewService(deps);
+      expect((await svc.getOverviewProjects()).projects).toHaveLength(2);
+      expect((await svc.getOverviewProjects({ projectIds: [] })).projects).toHaveLength(2);
+    });
+  });
+
   describe("resilience", () => {
     it("should throw when listProjects fails (route surfaces a 500)", async () => {
       const deps = makeDeps({ projects: [] });

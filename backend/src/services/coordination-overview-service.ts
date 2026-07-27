@@ -81,9 +81,22 @@ export interface CoordinationOverviewConfig {
   now?: () => number;
 }
 
+/** Options for a single {@link CoordinationOverviewService.getOverviewProjects} call. */
+export interface GetOverviewProjectsOptions {
+  /**
+   * When present AND non-empty, roll up ONLY these project ids — the fast path:
+   * unrequested projects are never fetched, so a small selection stays quick and
+   * sidesteps cold-dolt "degraded" noise. Unknown ids are silently ignored.
+   * Omitted or empty → roll up every project.
+   */
+  projectIds?: string[];
+}
+
 export interface CoordinationOverviewService {
-  /** Build the full portfolio rollup in a single call. */
-  getOverviewProjects: () => Promise<OverviewProjectsResponse>;
+  /** Build the portfolio rollup, optionally filtered to a subset of projects. */
+  getOverviewProjects: (
+    options?: GetOverviewProjectsOptions
+  ) => Promise<OverviewProjectsResponse>;
 }
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
@@ -503,7 +516,9 @@ export function createCoordinationOverviewService(
     return byName;
   }
 
-  async function getOverviewProjects(): Promise<OverviewProjectsResponse> {
+  async function getOverviewProjects(
+    options?: GetOverviewProjectsOptions
+  ): Promise<OverviewProjectsResponse> {
     const projectsRes = deps.listProjects();
     if (!projectsRes.success || !projectsRes.data) {
       // Hard failure — the route turns this into a 500.
@@ -511,7 +526,16 @@ export function createCoordinationOverviewService(
         projectsRes.error?.message ?? "Failed to list projects for overview"
       );
     }
-    const projects = projectsRes.data;
+
+    // adj-209.1.3 — optional projectIds allow-list. Filter BEFORE any bead fetch
+    // so a small selection never pays for the unrequested projects; unknown ids
+    // just fall out of the intersection (no error). Empty/absent → all projects.
+    let projects = projectsRes.data;
+    const filterIds = options?.projectIds;
+    if (filterIds && filterIds.length > 0) {
+      const wanted = new Set(filterIds);
+      projects = projects.filter((p) => wanted.has(p.id));
+    }
 
     const agentsByProjectName = await loadAgents();
 
