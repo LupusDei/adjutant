@@ -3,39 +3,38 @@ import AdjutantKit
 
 // MARK: - MissionControlMapView
 
-/// Natively-drawn (SwiftUI `Canvas`/`Path`) portfolio coordination map (adj-208.3.3).
+/// Natively-drawn (SwiftUI `Canvas`/`Path`) portfolio coordination map
+/// (adj-208.3.3, extended for per-feature agentic intensity in adj-209.4.2).
 ///
 /// A single Canvas draws every element in one GPU-backed pass (no per-node SwiftUI views → 60fps):
 /// the coordinator hub at the base, one stream per project rising to its active-epic node with a
-/// completion ring, agent markers, a status beacon, a queued/backlog reservoir, per-project
-/// remaining-work badges, and a portfolio header line. All geometry comes from the pure,
+/// completion ring, the project's in-progress FEATURES as distinct waypoint nodes along the stream
+/// (each with its own completion ring, status beacon, and UNCAPPED agent count), a status beacon,
+/// a queued/backlog reservoir, and a portfolio header line. All geometry comes from the pure,
 /// unit-tested `MissionControlLayout`; all color from the `CRTTheme.Brand` tokens (adj-208.3.1).
 ///
-/// Consumes the real `AdjutantKit` rollup model (`ProjectStreamRollup` / `PortfolioTotals`,
-/// adj-208.2.1). Completion percents are INTEGER 0–100 (backend `Math.round(fraction*100)`), so
-/// the ring/arc/height math divides by 100. View-only in v1 — no tap-to-drill-down.
+/// **Per-feature agentic intensity (adj-209.4.2):** each project carries a composite
+/// `activityLevel` (0…1, backend-computed from agents + progress cadence + in-progress beads).
+/// `MissionControlLayout.intensity(activityLevel:)` maps it to a monotonic
+/// `(streamThickness, glowRadius, flowSpeed)`. A busier stream is THICKER, BRIGHTER, GLOWS more,
+/// and its flow dashes move FASTER — so "busy reads hotter" at a glance. Thickness/brightness/glow
+/// are visible in a static frame (so a screenshot still tells the story); flow speed is the live
+/// extra via `TimelineView(.animation)`.
 ///
-/// Accessibility & legibility (adj-208.3.3.x review):
-/// - Status is encoded by SHAPE **and** color (not color-only): ● on-track, ◎ needs-input,
-///   ▲ blocked, ○ unknown — mirrored on the agent markers. A bottom legend names the shapes.
-/// - Empty portfolio renders explicit "NO ACTIVE PROJECTS" copy, not a bare hub.
-/// - The map grows its content width and scrolls horizontally past ~4 projects so labels never
-///   collide.
-/// - Stream HEIGHT encodes distance-to-done (the proposal's signature cue).
+/// Consumes the real `AdjutantKit` rollup model (`ProjectStreamRollup`/`FeatureRollup`/
+/// `PortfolioTotals`). Completion percents are INTEGER 0–100. View-only — no tap-to-drill-down.
+///
+/// Accessibility & legibility:
+/// - Status is encoded by SHAPE **and** color (● on-track, ◎ needs-input, ▲ blocked, ○ unknown).
+/// - Agent counts are shown as exact NUMBERS (uncapped) — no "+N" truncation that hides real load.
+/// - Empty portfolio renders explicit "NO ACTIVE PROJECTS" copy.
+/// - The map grows its content width and scrolls horizontally past ~4 projects so labels never collide.
 struct MissionControlMapView: View {
     let projects: [ProjectStreamRollup]
     let totals: PortfolioTotals
 
-    @Environment(\.crtTheme) private var theme
-
-    // MARK: Layout constants
+    // Only the layout constants the SCROLL container needs to size its content.
     private let hMargin: CGFloat = 46
-    private let topMargin: CGFloat = 92      // header band + beacon + tallest node
-    private let baseMargin: CGFloat = 72     // hub inset from the bottom (room for caption + legend)
-    private let nodeRadius: CGFloat = 22
-    private let ringWidth: CGFloat = 5
-    private let hubRadius: CGFloat = 17
-    private let heightBand: CGFloat = 66     // vertical range of the distance-to-done encoding
     private let minStreamSpacing: CGFloat = 138  // below this, labels collide → grow + scroll
 
     var body: some View {
@@ -46,17 +45,57 @@ struct MissionControlMapView: View {
             let contentWidth = max(available, needed)
 
             ScrollView(.horizontal, showsIndicators: contentWidth > available + 1) {
-                mapCanvas(size: CGSize(width: contentWidth, height: geo.size.height))
-                    .frame(width: contentWidth, height: geo.size.height)
+                MissionControlCanvasView(
+                    projects: projects, totals: totals,
+                    size: CGSize(width: contentWidth, height: geo.size.height)
+                )
             }
         }
     }
+}
 
-    private func mapCanvas(size: CGSize) -> some View {
+/// The drawn Mission Control map at an EXPLICIT size, with NO scroll container.
+///
+/// Separating the drawing from `MissionControlMapView`'s `ScrollView` keeps the layout/scroll
+/// concern and the rendering concern in different types (cleaner + independently testable), and
+/// gives an offscreen `ImageRenderer` a scroll-free entry point — `ScrollView` renders BLANK under
+/// `ImageRenderer`, which the adj-209.4.3 PNG validation harness relies on.
+struct MissionControlCanvasView: View {
+    let projects: [ProjectStreamRollup]
+    let totals: PortfolioTotals
+    let size: CGSize
+
+    @Environment(\.crtTheme) private var theme
+
+    // MARK: Layout constants
+    private let hMargin: CGFloat = 46
+    private let topMargin: CGFloat = 92      // header band + beacon + tallest node
+    private let baseMargin: CGFloat = 72     // hub inset from the bottom (room for caption + legend)
+    private let nodeRadius: CGFloat = 22
+    private let ringWidth: CGFloat = 5
+    private let featureRadius: CGFloat = 12   // smaller than the headline epic node
+    private let featureRingWidth: CGFloat = 3
+    private let featureSpread: CGFloat = 46    // horizontal fan of feature tributaries
+    private let hubRadius: CGFloat = 17
+    private let heightBand: CGFloat = 66     // vertical range of the distance-to-done encoding
+
+    /// Base flow speed (dash phase points/sec at flowSpeed == 1). Scaled per stream by intensity.
+    private let baseFlowRate: CGFloat = 26
+
+    var body: some View {
+        // TimelineView drives the animated flow; thickness/brightness/glow are STATIC so a single
+        // captured frame still shows the intensity difference (used by the PNG validator).
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let phase = CGFloat(timeline.date.timeIntervalSinceReferenceDate)
+            mapCanvas(flowPhase: phase)
+                .frame(width: size.width, height: size.height)
+        }
+    }
+
+    private func mapCanvas(flowPhase: CGFloat) -> some View {
         Canvas { context, canvasSize in
             let hub = MissionControlLayout.hubAnchor(size: canvasSize, margin: baseMargin)
             let backlog = MissionControlLayout.backlogAnchor(size: canvasSize, margin: baseMargin)
-            // Non-overlapping y for the hub caption and the shape legend (adj-208.3.4.1b).
             let bottom = MissionControlLayout.bottomBand(height: canvasSize.height, hubY: hub.y, hubRadius: hubRadius)
 
             drawBaseline(&context, size: canvasSize, hub: hub)
@@ -74,8 +113,16 @@ struct MissionControlMapView: View {
                         topMargin: topMargin, band: heightBand
                     )
                 }
-                for epic in epics { drawStream(&context, from: hub, to: epic) }
+                // Streams first (under the nodes), each with its own intensity.
                 for (i, project) in projects.enumerated() {
+                    drawStream(&context, from: hub, to: epics[i],
+                               intensity: intensity(project), flowPhase: flowPhase)
+                }
+                // Feature tributaries + nodes, then the headline project cluster on top.
+                for (i, project) in projects.enumerated() {
+                    let streamX = (i < xs.count ? xs[i] : canvasSize.width / 2)
+                    drawFeatures(&context, project: project, streamX: streamX,
+                                 epic: epics[i], hub: hub, drawWidth: canvasSize.width)
                     drawProject(&context, project: project, at: epics[i], drawWidth: canvasSize.width)
                 }
                 drawLegend(&context, legendY: bottom.legendY)
@@ -87,11 +134,14 @@ struct MissionControlMapView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
-        .drawingGroup()  // rasterize the whole map once per data change — steady 60fps on scroll
     }
 
     private func completionFraction(_ project: ProjectStreamRollup) -> CGFloat {
         CGFloat((project.activeEpic?.completionPercent ?? 0) / 100)
+    }
+
+    private func intensity(_ project: ProjectStreamRollup) -> MissionControlLayout.Intensity {
+        MissionControlLayout.intensity(activityLevel: CGFloat(project.activityLevel))
     }
 
     // MARK: - Baseline
@@ -117,9 +167,10 @@ struct MissionControlMapView: View {
         context.draw(sub, at: CGPoint(x: center.x, y: center.y + 18), anchor: .center)
     }
 
-    // MARK: - Stream
+    // MARK: - Stream (intensity: thickness + brightness + animated flow)
 
-    private func drawStream(_ context: inout GraphicsContext, from hub: CGPoint, to epic: CGPoint) {
+    private func drawStream(_ context: inout GraphicsContext, from hub: CGPoint, to epic: CGPoint,
+                            intensity: MissionControlLayout.Intensity, flowPhase: CGFloat) {
         var path = Path()
         path.move(to: hub)
         let dy = (epic.y - hub.y) * 0.5  // smooth S-curve rising from the base hub to the epic node
@@ -128,21 +179,135 @@ struct MissionControlMapView: View {
             control1: CGPoint(x: hub.x, y: hub.y + dy),
             control2: CGPoint(x: epic.x, y: epic.y - dy)
         )
+
+        // Brightness rises with heat so a busy stream reads brighter, not just thicker.
+        let heat = brightness(for: intensity)
+        let gradient = Gradient(colors: [
+            CRTTheme.Brand.violet.opacity(0.35 + 0.55 * heat),
+            CRTTheme.Brand.cyan.opacity(0.55 + 0.45 * heat)
+        ])
+
+        // Soft under-glow whose radius scales with activity (0 at idle → visible bloom when hot).
+        if intensity.glowRadius > 0.5 {
+            var glowCtx = context
+            glowCtx.addFilter(.blur(radius: intensity.glowRadius * 0.6))
+            glowCtx.stroke(path, with: .color(CRTTheme.Brand.cyan.opacity(0.20 + 0.30 * heat)),
+                           style: StrokeStyle(lineWidth: intensity.streamThickness + 2, lineCap: .round))
+        }
+
+        // Base stream.
         context.stroke(
             path,
-            with: .linearGradient(
-                Gradient(colors: [CRTTheme.Brand.violet.opacity(0.85), CRTTheme.Brand.cyan]),
-                startPoint: hub, endPoint: epic
-            ),
-            style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+            with: .linearGradient(gradient, startPoint: hub, endPoint: epic),
+            style: StrokeStyle(lineWidth: intensity.streamThickness, lineCap: .round)
+        )
+
+        // Animated flow: bright dashes drifting hub → epic at a speed that scales with activity.
+        let dashPhase = -flowPhase * baseFlowRate * intensity.flowSpeed
+        context.stroke(
+            path,
+            with: .color(CRTTheme.Brand.cyanText.opacity(0.35 + 0.5 * heat)),
+            style: StrokeStyle(lineWidth: max(1.5, intensity.streamThickness * 0.4),
+                               lineCap: .round, dash: [3, 11], dashPhase: dashPhase)
         )
     }
 
-    // MARK: - Project cluster (node + ring + beacon + name + badge + agents)
+    /// Normalized "heat" 0…1 recovered from the intensity's thickness (its canonical scale),
+    /// used to drive brightness/opacity consistently across stream and nodes.
+    private func brightness(for intensity: MissionControlLayout.Intensity) -> CGFloat {
+        let cold = MissionControlLayout.intensity(activityLevel: 0).streamThickness
+        let hot = MissionControlLayout.intensity(activityLevel: 1).streamThickness
+        guard hot > cold else { return 1 }
+        return min(max((intensity.streamThickness - cold) / (hot - cold), 0), 1)
+    }
+
+    // MARK: - Feature tributary nodes (adj-209.4.2)
+
+    /// Draws each in-progress FEATURE as a distinct waypoint node fanned along the stream between
+    /// the hub and the epic node — a small completion ring + status beacon + exact agent count,
+    /// linked to the stream centerline by a thin tributary connector.
+    private func drawFeatures(_ context: inout GraphicsContext, project: ProjectStreamRollup,
+                              streamX: CGFloat, epic: CGPoint, hub: CGPoint, drawWidth: CGFloat) {
+        guard !project.features.isEmpty else { return }
+        // Reserve a little clearance above the epic node and above the hub so nodes never collide with them.
+        let bandTop = epic.y + nodeRadius + featureRadius + 6
+        let bandBottom = hub.y - hubRadius - featureRadius - 8
+        guard bandBottom > bandTop else { return }  // stream too short for tributaries this frame
+
+        let pts = MissionControlLayout.featureNodePositions(
+            count: project.features.count,
+            streamX: streamX, epicY: bandTop, hubY: bandBottom,
+            spread: featureSpread,
+            minX: hMargin + featureRadius, maxX: drawWidth - hMargin - featureRadius
+        )
+
+        for (i, feature) in project.features.enumerated() where i < pts.count {
+            let p = pts[i]
+            let fi = MissionControlLayout.intensity(activityLevel: CGFloat(feature.activityLevel))
+            let heat = brightness(for: fi)
+
+            // Tributary connector from the stream centerline to the feature node.
+            var link = Path()
+            link.move(to: CGPoint(x: streamX, y: p.y))
+            link.addLine(to: p)
+            context.stroke(link, with: .color(theme.dim.opacity(0.35 + 0.25 * heat)),
+                           style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+
+            // Activity glow around the node (scales with the feature's own heat).
+            if fi.glowRadius > 0.5 {
+                let gr = featureRadius + fi.glowRadius * 0.7
+                context.fill(
+                    Path(ellipseIn: CGRect(x: p.x - gr, y: p.y - gr, width: gr * 2, height: gr * 2)),
+                    with: .color(CRTTheme.Brand.cyan.opacity(0.10 + 0.18 * heat))
+                )
+            }
+
+            // Completion ring — track + progress arc, brightened by heat.
+            let r = featureRadius
+            let rect = CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+            context.stroke(Path(ellipseIn: rect), with: .color(theme.dim.opacity(0.30)), lineWidth: featureRingWidth)
+            let fraction = CGFloat(feature.completionPercent / 100)
+            let start: CGFloat = -.pi / 2
+            let end = MissionControlLayout.completionArcEndAngle(percent: fraction, startAngle: start)
+            var arc = Path()
+            arc.addArc(center: p, radius: r, startAngle: Angle(radians: Double(start)),
+                       endAngle: Angle(radians: Double(end)), clockwise: false)
+            context.stroke(arc, with: .color(CRTTheme.Brand.cyan.opacity(0.6 + 0.4 * heat)),
+                           style: StrokeStyle(lineWidth: featureRingWidth, lineCap: .round))
+
+            // Node fill.
+            context.fill(Path(ellipseIn: rect.insetBy(dx: featureRingWidth, dy: featureRingWidth)),
+                         with: .color(theme.background.elevated))
+
+            // Status beacon (SHAPE + color) at the node's top-left shoulder.
+            let key = MissionControlLayout.beaconKey(forStatus: feature.status)
+            drawBeacon(&context, at: CGPoint(x: p.x - r + 1, y: p.y - r + 1), key: key, scale: 0.62)
+
+            // Exact, UNCAPPED agent count centered in the node (an ⓐ glyph + number).
+            let count = feature.agents.count
+            let label = Text("\(count)")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(count > 0 ? CRTTheme.Brand.cyanText : theme.dim)
+            context.draw(label, at: p, anchor: .center)
+        }
+    }
+
+    // MARK: - Project cluster (headline epic node + ring + beacon + name + badge + agents)
 
     private func drawProject(_ context: inout GraphicsContext, project: ProjectStreamRollup, at epic: CGPoint, drawWidth: CGFloat) {
         let percent100 = project.activeEpic?.completionPercent ?? 0
         let fraction = CGFloat(percent100 / 100)
+        let intens = intensity(project)
+        let heat = brightness(for: intens)
+
+        // Headline-node activity glow (scales with the project's composite heat).
+        if intens.glowRadius > 0.5 {
+            let gr = nodeRadius + intens.glowRadius
+            context.fill(
+                Path(ellipseIn: CGRect(x: epic.x - gr, y: epic.y - gr, width: gr * 2, height: gr * 2)),
+                with: .color(CRTTheme.Brand.cyan.opacity(0.08 + 0.16 * heat))
+            )
+        }
 
         // Completion ring — dim track + bright progress arc.
         let ringRect = CGRect(x: epic.x - nodeRadius, y: epic.y - nodeRadius, width: nodeRadius * 2, height: nodeRadius * 2)
@@ -154,7 +319,7 @@ struct MissionControlMapView: View {
         arc.addArc(center: epic, radius: nodeRadius,
                    startAngle: Angle(radians: Double(startAngle)),
                    endAngle: Angle(radians: Double(endAngle)), clockwise: false)
-        context.stroke(arc, with: .color(CRTTheme.Brand.cyan), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+        context.stroke(arc, with: .color(CRTTheme.Brand.cyan.opacity(0.7 + 0.3 * heat)), style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
 
         // Node fill + completion % label.
         context.fill(Path(ellipseIn: ringRect.insetBy(dx: ringWidth, dy: ringWidth)), with: .color(theme.background.elevated))
@@ -167,9 +332,8 @@ struct MissionControlMapView: View {
         let beaconKey = MissionControlLayout.beaconKey(forStatus: project.status)
         drawBeacon(&context, at: CGPoint(x: epic.x, y: epic.y - nodeRadius - 12), key: beaconKey)
 
-        // Label cluster: project name + two-line remaining-work badge + agents. Kept narrow
-        // (two lines, not one) and horizontally CLAMPED as a group so the outermost projects'
-        // labels never clip off either screen edge (adj-208.3.4.1a; badge wording adj-208.3.3.6).
+        // Label cluster: project name + two-line remaining-work badge + exact agent count. Kept narrow
+        // (two lines) and horizontally CLAMPED as a group so the outermost projects' labels never clip.
         let name = Text(project.name.uppercased())
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .foregroundColor(theme.textPrimary)
@@ -180,7 +344,6 @@ struct MissionControlMapView: View {
         let epicsLine = Text("\(project.epicsRemaining) EPICS").font(badgeFont).foregroundColor(CRTTheme.Brand.violetText)
         let beadsLine = Text("\(project.openBeadsRemaining) OPEN BEADS").font(badgeFont).foregroundColor(CRTTheme.Brand.violetText)
 
-        // Clamp the cluster to its widest measured line so nothing crosses the safe margins.
         let nameResolved = context.resolve(name)
         let beadsResolved = context.resolve(beadsLine)
         let clusterWidth = max(
@@ -195,28 +358,29 @@ struct MissionControlMapView: View {
         context.draw(context.resolve(epicsLine), at: CGPoint(x: labelX, y: epic.y + nodeRadius + 27), anchor: .center)
         context.draw(beadsResolved, at: CGPoint(x: labelX, y: epic.y + nodeRadius + 39), anchor: .center)
 
-        // Agent markers — shape+color coded (adj-208.3.3.1), cap at 5 then "+N".
-        drawAgents(&context, agents: project.agents, centerX: labelX, y: epic.y + nodeRadius + 54)
+        // Exact, UNCAPPED project agent total (no 5-dot cap). A representative status dot + the true number.
+        drawAgentTotal(&context, agents: project.agents, agentCount: project.agentCount,
+                       centerX: labelX, y: epic.y + nodeRadius + 54)
     }
 
     // MARK: - Status beacon shapes (adj-208.3.3.1)
 
     /// Redundant SHAPE + color encoding so status is legible without relying on hue alone.
-    private func drawBeacon(_ context: inout GraphicsContext, at c: CGPoint, key: MissionControlLayout.BeaconKey) {
+    private func drawBeacon(_ context: inout GraphicsContext, at c: CGPoint, key: MissionControlLayout.BeaconKey, scale: CGFloat = 1) {
         let color = beaconColor(key)
-        let r: CGFloat = 6
-        context.fill(Path(ellipseIn: CGRect(x: c.x - r - 3, y: c.y - r - 3, width: (r + 3) * 2, height: (r + 3) * 2)),
+        let r: CGFloat = 6 * scale
+        context.fill(Path(ellipseIn: CGRect(x: c.x - r - 3 * scale, y: c.y - r - 3 * scale, width: (r + 3 * scale) * 2, height: (r + 3 * scale) * 2)),
                      with: .color(color.opacity(0.22)))  // halo
         switch key {
         case .green:  // ● solid disc
             context.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color))
         case .amber:  // ◎ ring + center dot
-            context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color), lineWidth: 2)
-            context.fill(Path(ellipseIn: CGRect(x: c.x - 2, y: c.y - 2, width: 4, height: 4)), with: .color(color))
+            context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color), lineWidth: 2 * scale)
+            context.fill(Path(ellipseIn: CGRect(x: c.x - 2 * scale, y: c.y - 2 * scale, width: 4 * scale, height: 4 * scale)), with: .color(color))
         case .red:    // ▲ filled triangle (alert)
-            context.fill(trianglePath(center: c, radius: r + 1), with: .color(color))
+            context.fill(trianglePath(center: c, radius: r + 1 * scale), with: .color(color))
         case .neutral:  // ○ hollow thin ring
-            context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color), lineWidth: 1.5)
+            context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color), lineWidth: 1.5 * scale)
         }
     }
 
@@ -229,41 +393,32 @@ struct MissionControlMapView: View {
         return p
     }
 
-    private func drawAgents(_ context: inout GraphicsContext, agents: [ProjectAgent], centerX: CGFloat, y: CGFloat) {
-        guard !agents.isEmpty else { return }
-        let maxDots = 5
-        let shown = min(agents.count, maxDots)
-        let spacing: CGFloat = 13
-        let totalWidth = CGFloat(shown - 1) * spacing
-        var x = centerX - totalWidth / 2
-        for i in 0..<shown {
-            drawAgentMarker(&context, at: CGPoint(x: x, y: y), status: agents[i].status)
-            x += spacing
-        }
-        if agents.count > maxDots {
-            let more = Text("+\(agents.count - maxDots)")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(theme.dim)
-            context.draw(more, at: CGPoint(x: x + 3, y: y), anchor: .leading)
-        }
+    /// Exact, UNCAPPED agent readout for a project: a representative status dot + the true count and
+    /// the word AGENTS. Replaces the old 5-dot "+N" cap so real load is never hidden (adj-209.4.2).
+    private func drawAgentTotal(_ context: inout GraphicsContext, agents: [ProjectAgent], agentCount: Int, centerX: CGFloat, y: CGFloat) {
+        let count = max(agentCount, agents.count)
+        guard count > 0 else { return }
+        // Pick the most severe status present so the dot colour reflects the worst-case agent.
+        let dotColor = agentColor(dominantStatus(agents))
+        let text = Text("\(count) AGENT\(count == 1 ? "" : "S")")
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .foregroundColor(theme.textSecondary)
+        let resolved = context.resolve(text)
+        let sz = resolved.measure(in: CGSize(width: 200, height: 20))
+        let dotR: CGFloat = 3.5
+        let gap: CGFloat = 6
+        let totalW = dotR * 2 + gap + sz.width
+        let startX = centerX - totalW / 2
+        context.fill(Path(ellipseIn: CGRect(x: startX, y: y - dotR, width: dotR * 2, height: dotR * 2)), with: .color(dotColor))
+        context.draw(resolved, at: CGPoint(x: startX + dotR * 2 + gap, y: y), anchor: .leading)
     }
 
-    /// Agent status by SHAPE + color: ● working, ○ idle, ▲ blocked, ⊘ offline.
-    private func drawAgentMarker(_ context: inout GraphicsContext, at c: CGPoint, status: String) {
-        let color = agentColor(status)
-        let r: CGFloat = 4
-        switch status.lowercased() {
-        case "working":
-            context.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color))
-        case "blocked":
-            context.fill(trianglePath(center: c, radius: r + 0.5), with: .color(color))
-        case "idle":
-            context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color), lineWidth: 1.5)
-        default:  // offline — hollow ring + slash
-            context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(color), lineWidth: 1)
-            var slash = Path(); slash.move(to: CGPoint(x: c.x - r, y: c.y + r)); slash.addLine(to: CGPoint(x: c.x + r, y: c.y - r))
-            context.stroke(slash, with: .color(color), lineWidth: 1)
-        }
+    /// The most severe status among a project's agents (blocked > working > idle > other),
+    /// so a single summary dot flags trouble rather than averaging it away.
+    private func dominantStatus(_ agents: [ProjectAgent]) -> String {
+        let order = ["blocked", "working", "idle"]
+        for s in order where agents.contains(where: { $0.status.lowercased() == s }) { return s }
+        return agents.first?.status ?? "offline"
     }
 
     // MARK: - Legend (adj-208.3.3.1 — names the shapes so they aren't color-only)
@@ -323,8 +478,7 @@ struct MissionControlMapView: View {
             .foregroundColor(theme.textSecondary)
         context.draw(stats, at: CGPoint(x: hMargin, y: 40), anchor: .leading)
 
-        // Attention chips: blocked / needs-input, only when non-zero. Outline-only (no fill) so the
-        // small bold status-color text keeps AA contrast on the dark screen (adj-208.3.3.1).
+        // Attention chips: blocked / needs-input, only when non-zero. Outline-only (no fill).
         var chipX = size.width - hMargin
         if totals.blocked > 0 {
             chipX = drawChip(&context, text: "\(totals.blocked) BLOCKED", color: CRTTheme.State.error, rightX: chipX, y: 30)
@@ -342,7 +496,6 @@ struct MissionControlMapView: View {
         let padding: CGFloat = 8
         let width = sz.width + padding * 2
         let rect = CGRect(x: rightX - width, y: y - 9, width: width, height: 18)
-        // No fill — text sits on the dark screen for AA. A subtle border carries the chip affordance.
         context.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(color.opacity(0.7)), lineWidth: 1)
         context.draw(resolved, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
         return rect.minX - 8
@@ -380,7 +533,12 @@ struct MissionControlMapView: View {
         if totals.needsInput > 0 { parts.append("\(totals.needsInput) need input.") }
         for p in projects {
             let c = Int((p.activeEpic?.completionPercent ?? 0).rounded())
-            parts.append("\(p.name): \(p.status.replacingOccurrences(of: "_", with: " ")), \(c) percent, \(p.epicsRemaining) epics and \(p.openBeadsRemaining) open beads remaining, \(p.agents.count) agents.")
+            let activity = Int((p.activityLevel * 100).rounded())
+            var line = "\(p.name): \(p.status.replacingOccurrences(of: "_", with: " ")), \(c) percent, activity \(activity) percent, \(p.epicsRemaining) epics and \(p.openBeadsRemaining) open beads remaining, \(p.agentCount) agents."
+            if !p.features.isEmpty {
+                line += " \(p.features.count) active features."
+            }
+            parts.append(line)
         }
         return parts.joined(separator: " ")
     }
@@ -389,57 +547,113 @@ struct MissionControlMapView: View {
 // MARK: - Preview
 
 #if DEBUG
-/// Sample portfolio for previews (real `AdjutantKit` rollup types). Percents are 0–100.
+/// Sample portfolio for previews (real `AdjutantKit` rollup types). Percents are 0–100; activityLevel 0–1.
 private enum MissionControlPreviewData {
-    static let projects: [ProjectStreamRollup] = [
+    static func agents(_ statuses: [String]) -> [ProjectAgent] {
+        statuses.enumerated().map { ProjectAgent(id: "a\($0.offset)", status: $0.element) }
+    }
+
+    /// LOW activity portfolio — everything idle/cool (streams thin, dim, barely flowing).
+    static let low: [ProjectStreamRollup] = [
         ProjectStreamRollup(
             projectId: "adjutant", name: "Adjutant",
-            activeEpic: ActiveEpic(id: "adj-208", title: "Mission Control", completionPercent: 42, closedChildren: 5, totalChildren: 12),
-            epicsRemaining: 3, openBeadsRemaining: 14,
-            agents: [ProjectAgent(id: "abathur", status: "working"), ProjectAgent(id: "kerrigan", status: "working"), ProjectAgent(id: "raynor", status: "idle")],
-            status: "on_track"
+            activeEpic: ActiveEpic(id: "adj-209", title: "Mission Control", completionPercent: 30, closedChildren: 3, totalChildren: 10),
+            epicsRemaining: 2, openBeadsRemaining: 9, agents: agents(["idle"]),
+            status: "on_track",
+            features: [
+                FeatureRollup(id: "f1", title: "Selector", completionPercent: 20, closedChildren: 1, totalChildren: 5, agents: agents(["idle"]), activityLevel: 0.05, status: "on_track"),
+                FeatureRollup(id: "f2", title: "Map", completionPercent: 40, closedChildren: 2, totalChildren: 5, agents: [], activityLevel: 0.0, status: "on_track"),
+            ],
+            activityLevel: 0.06, agentCount: 1
         ),
         ProjectStreamRollup(
             projectId: "bloomfolio", name: "Bloomfolio",
-            activeEpic: ActiveEpic(id: "blm-42", title: "Portfolio v2", completionPercent: 78, closedChildren: 18, totalChildren: 23),
-            epicsRemaining: 1, openBeadsRemaining: 6,
-            agents: [ProjectAgent(id: "tassadar", status: "blocked")],
-            status: "blocked"
+            activeEpic: ActiveEpic(id: "blm-42", title: "Portfolio v2", completionPercent: 55, closedChildren: 11, totalChildren: 20),
+            epicsRemaining: 1, openBeadsRemaining: 4, agents: [],
+            status: "on_track",
+            features: [
+                FeatureRollup(id: "b1", title: "Cards", completionPercent: 60, closedChildren: 3, totalChildren: 5, agents: [], activityLevel: 0.0, status: "on_track"),
+            ],
+            activityLevel: 0.02, agentCount: 0
+        ),
+    ]
+
+    /// HIGH activity portfolio — same shape, but hot: many agents, high activityLevel.
+    static let high: [ProjectStreamRollup] = [
+        ProjectStreamRollup(
+            projectId: "adjutant", name: "Adjutant",
+            activeEpic: ActiveEpic(id: "adj-209", title: "Mission Control", completionPercent: 30, closedChildren: 3, totalChildren: 10),
+            epicsRemaining: 2, openBeadsRemaining: 9,
+            agents: agents(["working", "working", "working", "working", "working", "working", "working"]),
+            status: "on_track",
+            features: [
+                FeatureRollup(id: "f1", title: "Selector", completionPercent: 20, closedChildren: 1, totalChildren: 5, agents: agents(["working", "working", "working"]), activityLevel: 0.95, status: "on_track"),
+                FeatureRollup(id: "f2", title: "Map", completionPercent: 40, closedChildren: 2, totalChildren: 5, agents: agents(["working", "working", "working", "working"]), activityLevel: 0.88, status: "on_track"),
+            ],
+            activityLevel: 0.96, agentCount: 7
         ),
         ProjectStreamRollup(
-            projectId: "runway", name: "Runway",
-            activeEpic: ActiveEpic(id: "rwy-9", title: "Avatar bridge", completionPercent: 15, closedChildren: 2, totalChildren: 13),
-            epicsRemaining: 4, openBeadsRemaining: 27,
-            agents: [ProjectAgent(id: "zeratul", status: "working"), ProjectAgent(id: "artanis", status: "idle"),
-                     ProjectAgent(id: "fenix", status: "working"), ProjectAgent(id: "selendis", status: "working"),
-                     ProjectAgent(id: "mohandar", status: "idle"), ProjectAgent(id: "urun", status: "working")],
-            status: "needs_input"
+            projectId: "bloomfolio", name: "Bloomfolio",
+            activeEpic: ActiveEpic(id: "blm-42", title: "Portfolio v2", completionPercent: 55, closedChildren: 11, totalChildren: 20),
+            epicsRemaining: 1, openBeadsRemaining: 4,
+            agents: agents(["working", "working", "blocked"]),
+            status: "blocked",
+            features: [
+                FeatureRollup(id: "b1", title: "Cards", completionPercent: 60, closedChildren: 3, totalChildren: 5, agents: agents(["working", "working", "blocked"]), activityLevel: 0.72, status: "blocked"),
+            ],
+            activityLevel: 0.80, agentCount: 3
         ),
     ]
 
-    static let totals = PortfolioTotals(
-        projects: 3, agentsActive: 10, epicsRemaining: 8, openBeadsRemaining: 47,
-        blocked: 1, needsInput: 1, portfolioCompletionPercent: 45
-    )
-
-    /// Six projects to exercise the horizontal-scroll / anti-collision path (adj-208.3.3.3).
-    static let manyProjects: [ProjectStreamRollup] = projects + [
-        ProjectStreamRollup(projectId: "p4", name: "Sanctuary", activeEpic: ActiveEpic(id: "s-1", title: "Ward", completionPercent: 90, closedChildren: 9, totalChildren: 10), epicsRemaining: 0, openBeadsRemaining: 2, agents: [ProjectAgent(id: "vorazun", status: "working")], status: "on_track"),
-        ProjectStreamRollup(projectId: "p5", name: "Aiur", activeEpic: ActiveEpic(id: "a-1", title: "Rebuild", completionPercent: 33, closedChildren: 4, totalChildren: 12), epicsRemaining: 2, openBeadsRemaining: 18, agents: [ProjectAgent(id: "karax", status: "idle")], status: "needs_input"),
-        ProjectStreamRollup(projectId: "p6", name: "Shakuras", activeEpic: nil, epicsRemaining: 5, openBeadsRemaining: 31, agents: [], status: "blocked"),
+    /// A single project with MANY features to exercise the multi-feature tributary layout.
+    static let multiFeature: [ProjectStreamRollup] = [
+        ProjectStreamRollup(
+            projectId: "runway", name: "Runway",
+            activeEpic: ActiveEpic(id: "rwy-9", title: "Avatar bridge", completionPercent: 45, closedChildren: 9, totalChildren: 20),
+            epicsRemaining: 3, openBeadsRemaining: 22,
+            agents: agents(["working", "working", "idle", "working", "blocked", "working"]),
+            status: "needs_input",
+            features: [
+                FeatureRollup(id: "r1", title: "STT", completionPercent: 80, closedChildren: 8, totalChildren: 10, agents: agents(["working", "working"]), activityLevel: 0.9, status: "on_track"),
+                FeatureRollup(id: "r2", title: "TTS", completionPercent: 55, closedChildren: 5, totalChildren: 9, agents: agents(["working"]), activityLevel: 0.6, status: "on_track"),
+                FeatureRollup(id: "r3", title: "PiP", completionPercent: 30, closedChildren: 3, totalChildren: 10, agents: agents(["blocked"]), activityLevel: 0.3, status: "blocked"),
+                FeatureRollup(id: "r4", title: "Transport", completionPercent: 15, closedChildren: 1, totalChildren: 7, agents: [], activityLevel: 0.05, status: "needs_input"),
+            ],
+            activityLevel: 0.7, agentCount: 6
+        ),
     ]
+
+    static func totals(_ projects: [ProjectStreamRollup]) -> PortfolioTotals {
+        PortfolioTotals(
+            projects: projects.count,
+            agentsActive: projects.reduce(0) { $0 + $1.agentCount },
+            epicsRemaining: projects.reduce(0) { $0 + $1.epicsRemaining },
+            openBeadsRemaining: projects.reduce(0) { $0 + $1.openBeadsRemaining },
+            blocked: projects.filter { $0.status == "blocked" }.count,
+            needsInput: projects.filter { $0.status == "needs_input" }.count,
+            portfolioCompletionPercent: projects.isEmpty ? 0 :
+                projects.reduce(0) { $0 + ($1.activeEpic?.completionPercent ?? 0) } / Double(projects.count)
+        )
+    }
 }
 
-#Preview("Mission Control — 3 projects") {
-    MissionControlMapView(projects: MissionControlPreviewData.projects, totals: MissionControlPreviewData.totals)
-        .frame(height: 520)
+#Preview("Mission Control — LOW intensity") {
+    MissionControlMapView(projects: MissionControlPreviewData.low, totals: MissionControlPreviewData.totals(MissionControlPreviewData.low))
+        .frame(height: 560)
         .background(CRTTheme.ColorTheme.starcraft.background.screen)
         .crtTheme(.starcraft)
 }
 
-#Preview("Mission Control — 6 projects (scroll)") {
-    MissionControlMapView(projects: MissionControlPreviewData.manyProjects, totals: MissionControlPreviewData.totals)
-        .frame(height: 520)
+#Preview("Mission Control — HIGH intensity") {
+    MissionControlMapView(projects: MissionControlPreviewData.high, totals: MissionControlPreviewData.totals(MissionControlPreviewData.high))
+        .frame(height: 560)
+        .background(CRTTheme.ColorTheme.starcraft.background.screen)
+        .crtTheme(.starcraft)
+}
+
+#Preview("Mission Control — multi-feature stream") {
+    MissionControlMapView(projects: MissionControlPreviewData.multiFeature, totals: MissionControlPreviewData.totals(MissionControlPreviewData.multiFeature))
+        .frame(height: 560)
         .background(CRTTheme.ColorTheme.starcraft.background.screen)
         .crtTheme(.starcraft)
 }
@@ -449,7 +663,7 @@ private enum MissionControlPreviewData {
         projects: 0, agentsActive: 0, epicsRemaining: 0, openBeadsRemaining: 0,
         blocked: 0, needsInput: 0, portfolioCompletionPercent: 0
     ))
-    .frame(height: 520)
+    .frame(height: 560)
     .background(CRTTheme.ColorTheme.starcraft.background.screen)
     .crtTheme(.starcraft)
 }
