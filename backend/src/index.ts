@@ -194,6 +194,9 @@ const questionService = createQuestionService({
 // per project (with a short timeout so a cold dolt can't wedge the bd mutex);
 // the service caches per-project with stale-while-revalidate + hard timeouts so
 // `GET /api/overview/projects` always responds fast. No `bd show` fan-out.
+// adj-209.1.2 — recent `report_progress` cadence window feeding the composite
+// activity signal. One indexed event-store lookup per rollup (no per-epic fan-out).
+const PROGRESS_CADENCE_WINDOW_MS = 15 * 60_000; // 15 min
 const coordinationOverviewService = createCoordinationOverviewService({
   listProjects: () => listProjects(),
   fetchProjectBeads: (projectPath) =>
@@ -201,6 +204,19 @@ const coordinationOverviewService = createCoordinationOverviewService({
   getAgents: () => getAgents(),
   listOpenQuestions: (projectId) =>
     questionStore.listQuestions({ projectId, status: "open" }),
+  getRecentProgressCounts: () => {
+    const after = new Date(Date.now() - PROGRESS_CADENCE_WINDOW_MS).toISOString();
+    const events = eventStore.getEvents({
+      eventType: "progress_report",
+      after,
+      limit: 500,
+    });
+    const counts = new Map<string, number>();
+    for (const e of events) {
+      counts.set(e.agentId, (counts.get(e.agentId) ?? 0) + 1);
+    }
+    return counts;
+  },
 });
 
 // adj-202.3.5 / adj-202.7 — The Bridge: cost-guarded avatar session broker + read-only

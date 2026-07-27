@@ -34,6 +34,7 @@ import type {
   ProjectStreamRollup,
   ActiveEpic,
   AgentMarker,
+  FeatureRollup,
   PortfolioTotals,
 } from "../types/overview-projects.js";
 
@@ -59,6 +60,14 @@ export interface CoordinationOverviewDeps {
   getAgents: () => Promise<ServiceResult<CrewMember[]>>;
   /** Open agent questions for a project (drives `needs_input`). */
   listOpenQuestions: (projectId: string) => AgentQuestion[];
+  /**
+   * Recent `report_progress` cadence signal (adj-209.1.2): a count of recent
+   * progress reports per agent id, within the caller's activity window. ONE
+   * cheap indexed lookup per request (production reads the event store); the
+   * service never fans out per epic. Optional — when omitted, activity still
+   * rises with engaged agents + in-progress beads (cadence contributes 0).
+   */
+  getRecentProgressCounts?: () => Map<string, number>;
 }
 
 export interface CoordinationOverviewConfig {
@@ -72,9 +81,22 @@ export interface CoordinationOverviewConfig {
   now?: () => number;
 }
 
+/** Options for a single {@link CoordinationOverviewService.getOverviewProjects} call. */
+export interface GetOverviewProjectsOptions {
+  /**
+   * When present AND non-empty, roll up ONLY these project ids — the fast path:
+   * unrequested projects are never fetched, so a small selection stays quick and
+   * sidesteps cold-dolt "degraded" noise. Unknown ids are silently ignored.
+   * Omitted or empty → roll up every project.
+   */
+  projectIds?: string[];
+}
+
 export interface CoordinationOverviewService {
-  /** Build the full portfolio rollup in a single call. */
-  getOverviewProjects: () => Promise<OverviewProjectsResponse>;
+  /** Build the portfolio rollup, optionally filtered to a subset of projects. */
+  getOverviewProjects: (
+    options?: GetOverviewProjectsOptions
+  ) => Promise<OverviewProjectsResponse>;
 }
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
@@ -82,8 +104,94 @@ const DEFAULT_PER_PROJECT_TIMEOUT_MS = 2_500;
 const DEFAULT_HARD_TIMEOUT_MS = 4_000;
 
 // ============================================================================
+// Activity level — composite agentic intensity (adj-209.1.2)
+// ============================================================================
+
+/**
+ * The three cheap, already-on-hand signals the composite intensity is built
+ * from. All are counts; each is clamped to `>= 0` before weighting.
+ */
+export interface ActivitySignals {
+  /** Agents actively engaged (working/booting/blocked/stuck — NOT idle/offline). */
+  engagedAgents: number;
+  /** In-progress (non-epic) beads in scope. */
+  inProgressBeads: number;
+  /** Recent `report_progress` reports in scope (cadence). */
+  recentProgressReports: number;
+}
+
+/**
+ * Relative weights. Engaged agents dominate (a live agent is the strongest
+ * "hot" signal), in-progress beads reinforce, and progress cadence is the
+ * lightest nudge (a single window can carry many reports). Tunable in one place.
+ */
+const ACTIVITY_WEIGHT_AGENTS = 1;
+const ACTIVITY_WEIGHT_INPROGRESS = 0.6;
+const ACTIVITY_WEIGHT_CADENCE = 0.35;
+
+/**
+ * Saturation constant for the `1 - e^(-raw/K)` curve. Larger K = slower ramp =
+ * more headroom before the curve flattens. K=3 keeps realistic fleet loads
+ * (a handful of agents/beads/reports) in the responsive 0.2–0.85 band so
+ * "busier = hotter" always has room to grow.
+ */
+const ACTIVITY_SATURATION_K = 3;
+
+/**
+ * A hard ceiling BELOW 1 so the level never pins to fully-saturated: the map
+ * always reads "there is room for more", and two extreme loads don't both
+ * collapse to an identical `1`.
+ */
+const ACTIVITY_CEILING = 0.999;
+
+/**
+ * Composite agentic intensity in `[0, ACTIVITY_CEILING]`, strictly monotonic in
+ * every signal. Pure and exported for direct unit testing.
+ *
+ * A weighted sum is squashed through a saturating exponential so the result is
+ * bounded, additive across signals, and never fully saturates — giving the
+ * Mission Control map a smooth "busier = hotter" encoding with real headroom.
+ * Rounded to 3 decimals for compact, stable JSON.
+ */
+export function computeActivityLevel(signals: ActivitySignals): number {
+  const raw =
+    ACTIVITY_WEIGHT_AGENTS * Math.max(0, signals.engagedAgents) +
+    ACTIVITY_WEIGHT_INPROGRESS * Math.max(0, signals.inProgressBeads) +
+    ACTIVITY_WEIGHT_CADENCE * Math.max(0, signals.recentProgressReports);
+  const level = 1 - Math.exp(-raw / ACTIVITY_SATURATION_K);
+  const rounded = Math.round(level * 1000) / 1000;
+  return Math.min(ACTIVITY_CEILING, rounded);
+}
+
+/** Agent statuses that count as "engaged" for the activity signal. */
+const IDLE = "idle";
+function isEngaged(a: AgentMarker): boolean {
+  return a.status !== OFFLINE && a.status !== IDLE;
+}
+
+// ============================================================================
 // Derived bead rollup (the cached, expensive-to-compute part)
 // ============================================================================
+
+/**
+ * A single in-progress epic as derived PURELY from the bead snapshot — the
+ * cacheable half of a feature. Live agents + the composite `activityLevel` are
+ * overlaid at response time (they change faster than the bead graph), so this
+ * carries the raw inputs for that overlay: `assignees` (to attribute agents)
+ * and `inProgressChildren` (the activity signal).
+ */
+interface FeatureRollupData {
+  id: string;
+  title: string;
+  completionPercent: number;
+  closedChildren: number;
+  totalChildren: number;
+  status: string;
+  /** Assignees of the epic + its child beads — used to attribute live agents. */
+  assignees: string[];
+  /** In-progress child beads of the epic — a per-feature activity signal. */
+  inProgressChildren: number;
+}
 
 /** The per-project fields derived from the bead snapshot (what we cache). */
 interface BeadRollup {
@@ -91,6 +199,10 @@ interface BeadRollup {
   epicsRemaining: number;
   openBeadsRemaining: number;
   hasBlocked: boolean;
+  /** In-progress epics as branchable feature nodes (adj-209). */
+  features: FeatureRollupData[];
+  /** Count of in-progress (non-epic) beads — the project-level activity signal. */
+  inProgressBeadCount: number;
 }
 
 const EMPTY_BEAD_ROLLUP: BeadRollup = {
@@ -98,6 +210,8 @@ const EMPTY_BEAD_ROLLUP: BeadRollup = {
   epicsRemaining: 0,
   openBeadsRemaining: 0,
   hasBlocked: false,
+  features: [],
+  inProgressBeadCount: 0,
 };
 
 // ============================================================================
@@ -160,10 +274,15 @@ export function rollupFromBeads(rawBeads: BeadsIssue[]): BeadRollup {
   const beads = excludeWisps(rawBeads);
 
   const statusMap = new Map<string, string>();
-  for (const b of beads) statusMap.set(b.id, b.status);
+  const beadById = new Map<string, BeadsIssue>();
+  for (const b of beads) {
+    statusMap.set(b.id, b.status);
+    beadById.set(b.id, b);
+  }
 
   const epics: BeadsIssue[] = [];
   let openBeadsRemaining = 0;
+  let inProgressBeadCount = 0;
   let hasBlocked = false;
 
   for (const b of beads) {
@@ -174,6 +293,9 @@ export function rollupFromBeads(rawBeads: BeadsIssue[]): BeadRollup {
       continue;
     }
     if (b.status === "open") openBeadsRemaining += 1;
+    // Project-level activity signal: in-progress NON-epic beads (the epic is a
+    // container, not a unit of work).
+    if (b.status === "in_progress") inProgressBeadCount += 1;
   }
 
   const progress = epics
@@ -181,11 +303,43 @@ export function rollupFromBeads(rawBeads: BeadsIssue[]): BeadRollup {
     .map((e) => computeEpicProgressFromDeps(e, e.dependencies ?? [], statusMap))
     .sort((a, b) => b.completionPercent - a.completionPercent);
 
+  // Features = the in-progress epics, each carrying the raw inputs the service
+  // overlays live agents + activity onto. Derived from the SAME single snapshot
+  // (no extra bd calls): child ids come from the epic's `bd list` edge tuples.
+  const features: FeatureRollupData[] = epics
+    .filter((e) => e.status === "in_progress")
+    .map((epic) => {
+      const prog = computeEpicProgressFromDeps(epic, epic.dependencies ?? [], statusMap);
+      const assignees = new Set<string>();
+      if (epic.assignee) assignees.add(epic.assignee);
+      let inProgressChildren = 0;
+      for (const dep of epic.dependencies ?? []) {
+        if (dep.issue_id !== epic.id) continue;
+        const child = beadById.get(dep.depends_on_id);
+        if (!child) continue;
+        if (child.assignee) assignees.add(child.assignee);
+        if (child.status === "in_progress") inProgressChildren += 1;
+      }
+      return {
+        id: epic.id,
+        title: epic.title,
+        completionPercent: toPercent(prog.completionPercent),
+        closedChildren: prog.closedChildren,
+        totalChildren: prog.totalChildren,
+        status: epic.status,
+        assignees: [...assignees],
+        inProgressChildren,
+      };
+    })
+    .sort((a, b) => b.completionPercent - a.completionPercent);
+
   return {
     activeEpic: pickActiveEpic(progress),
     epicsRemaining: progress.filter((e) => e.status === "open").length,
     openBeadsRemaining,
+    inProgressBeadCount,
     hasBlocked,
+    features,
   };
 }
 
@@ -268,25 +422,81 @@ export function createCoordinationOverviewService(
     return { data: EMPTY_BEAD_ROLLUP, degraded: true };
   }
 
+  /** Sum recent progress reports across a set of agents (cadence signal). */
+  function progressReportsFor(
+    agents: AgentMarker[],
+    counts: Map<string, number>
+  ): number {
+    let total = 0;
+    for (const a of agents) total += counts.get(a.id) ?? 0;
+    return total;
+  }
+
+  /**
+   * Compose one in-progress epic into a public {@link FeatureRollup}: attribute
+   * the project's live agents by assignee match, then derive the per-feature
+   * composite activity from (engaged agents + in-progress children + cadence).
+   */
+  function buildFeature(
+    f: FeatureRollupData,
+    projectAgents: AgentMarker[],
+    progressCounts: Map<string, number>
+  ): FeatureRollup {
+    const agents = projectAgents.filter((a) => f.assignees.includes(a.id));
+    const activityLevel = computeActivityLevel({
+      engagedAgents: agents.filter(isEngaged).length,
+      inProgressBeads: f.inProgressChildren,
+      recentProgressReports: progressReportsFor(agents, progressCounts),
+    });
+    return {
+      id: f.id,
+      title: f.title,
+      completionPercent: f.completionPercent,
+      closedChildren: f.closedChildren,
+      totalChildren: f.totalChildren,
+      agents,
+      activityLevel,
+      status: f.status,
+    };
+  }
+
   function buildRollup(
     proj: Project,
     bead: BeadRollup,
     degraded: boolean,
     agentsByProjectName: Map<string, AgentMarker[]>,
-    openQuestionCount: number
+    openQuestionCount: number,
+    progressCounts: Map<string, number>
   ): ProjectStreamRollup {
+    const agents = agentsByProjectName.get(proj.name) ?? [];
+    const features = bead.features.map((f) =>
+      buildFeature(f, agents, progressCounts)
+    );
+    // Project-level composite: ALL engaged agents + every in-progress bead +
+    // total recent cadence across the project's agents. Same normalized curve
+    // as the per-feature signal, so the project stream and its nodes share one
+    // scale.
+    const activityLevel = computeActivityLevel({
+      engagedAgents: agents.filter(isEngaged).length,
+      inProgressBeads: bead.inProgressBeadCount,
+      recentProgressReports: progressReportsFor(agents, progressCounts),
+    });
     return {
       projectId: proj.id,
       name: proj.name,
       activeEpic: bead.activeEpic,
       epicsRemaining: bead.epicsRemaining,
       openBeadsRemaining: bead.openBeadsRemaining,
-      agents: agentsByProjectName.get(proj.name) ?? [],
+      agents,
       status: bead.hasBlocked
         ? "blocked"
         : openQuestionCount > 0
           ? "needs_input"
           : "on_track",
+      features,
+      activityLevel,
+      // Uncapped: the map renders the true agent count (no 5-dot cap, adj-209).
+      agentCount: agents.length,
       degraded,
     };
   }
@@ -306,7 +516,9 @@ export function createCoordinationOverviewService(
     return byName;
   }
 
-  async function getOverviewProjects(): Promise<OverviewProjectsResponse> {
+  async function getOverviewProjects(
+    options?: GetOverviewProjectsOptions
+  ): Promise<OverviewProjectsResponse> {
     const projectsRes = deps.listProjects();
     if (!projectsRes.success || !projectsRes.data) {
       // Hard failure — the route turns this into a 500.
@@ -314,9 +526,22 @@ export function createCoordinationOverviewService(
         projectsRes.error?.message ?? "Failed to list projects for overview"
       );
     }
-    const projects = projectsRes.data;
+
+    // adj-209.1.3 — optional projectIds allow-list. Filter BEFORE any bead fetch
+    // so a small selection never pays for the unrequested projects; unknown ids
+    // just fall out of the intersection (no error). Empty/absent → all projects.
+    let projects = projectsRes.data;
+    const filterIds = options?.projectIds;
+    if (filterIds && filterIds.length > 0) {
+      const wanted = new Set(filterIds);
+      projects = projects.filter((p) => wanted.has(p.id));
+    }
 
     const agentsByProjectName = await loadAgents();
+
+    // ONE cheap lookup of recent progress cadence for the whole request (no
+    // per-project/per-epic fan-out). Absent dep → no cadence signal.
+    const progressCounts = deps.getRecentProgressCounts?.() ?? new Map<string, number>();
 
     // Absolute deadline: every project resolves by here (real, stale, or empty),
     // so the endpoint always responds within the hard timeout.
@@ -330,14 +555,22 @@ export function createCoordinationOverviewService(
         if (raced.timedOut) {
           // Hard deadline hit — serve last-known (stale) or empty, marked degraded.
           const data = cache.get(proj.id)?.data ?? EMPTY_BEAD_ROLLUP;
-          return buildRollup(proj, data, true, agentsByProjectName, openQuestions.length);
+          return buildRollup(
+            proj,
+            data,
+            true,
+            agentsByProjectName,
+            openQuestions.length,
+            progressCounts
+          );
         }
         return buildRollup(
           proj,
           raced.value.data,
           raced.value.degraded,
           agentsByProjectName,
-          openQuestions.length
+          openQuestions.length,
+          progressCounts
         );
       })
     );

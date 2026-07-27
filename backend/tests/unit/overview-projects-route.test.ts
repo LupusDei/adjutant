@@ -36,6 +36,20 @@ const SAMPLE: OverviewProjectsResponse = {
       openBeadsRemaining: 3,
       agents: [{ id: "A1", status: "working" }],
       status: "on_track",
+      features: [
+        {
+          id: "alpha-1",
+          title: "Active epic",
+          completionPercent: 67,
+          closedChildren: 2,
+          totalChildren: 3,
+          agents: [{ id: "A1", status: "working" }],
+          activityLevel: 0.5,
+          status: "in_progress",
+        },
+      ],
+      activityLevel: 0.5,
+      agentCount: 1,
       degraded: false,
     },
   ],
@@ -69,8 +83,42 @@ describe("GET /api/overview/projects", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.timestamp).toBeTypeOf("string");
     expect(res.body.data).toEqual(SAMPLE);
-    // Route delegates — service called exactly once, no arguments.
+    // Route delegates — service called exactly once. No filter param -> no filter.
     expect(service.getOverviewProjects).toHaveBeenCalledTimes(1);
+    expect(service.getOverviewProjects).toHaveBeenCalledWith(undefined);
+  });
+
+  it("should pass a parsed projectIds filter to the service (adj-209.1.3)", async () => {
+    const service: CoordinationOverviewService = {
+      getOverviewProjects: vi.fn(async () => SAMPLE),
+    };
+    const res = await request(appWith(service)).get(
+      "/api/overview/projects?projectIds=alpha-id,beta-id"
+    );
+    expect(res.status).toBe(200);
+    expect(service.getOverviewProjects).toHaveBeenCalledWith({
+      projectIds: ["alpha-id", "beta-id"],
+    });
+  });
+
+  it("should trim whitespace and drop empty segments in projectIds", async () => {
+    const service: CoordinationOverviewService = {
+      getOverviewProjects: vi.fn(async () => SAMPLE),
+    };
+    await request(appWith(service)).get(
+      "/api/overview/projects?projectIds=%20alpha-id%20,,beta-id,"
+    );
+    expect(service.getOverviewProjects).toHaveBeenCalledWith({
+      projectIds: ["alpha-id", "beta-id"],
+    });
+  });
+
+  it("should treat an empty projectIds value as no filter", async () => {
+    const service: CoordinationOverviewService = {
+      getOverviewProjects: vi.fn(async () => SAMPLE),
+    };
+    await request(appWith(service)).get("/api/overview/projects?projectIds=");
+    expect(service.getOverviewProjects).toHaveBeenCalledWith(undefined);
   });
 
   it("should return a 500 error envelope when the service throws", async () => {
