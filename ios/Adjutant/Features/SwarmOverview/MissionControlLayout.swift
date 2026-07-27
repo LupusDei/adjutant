@@ -102,9 +102,22 @@ enum MissionControlLayout {
         CGPoint(x: size.width - margin, y: size.height - margin)
     }
 
-    /// Position of a project's active-epic node: it stays on its stream's `streamX`
-    /// and rises to `topMargin` from the top of the drawable area.
-    static func epicNodePosition(streamX: CGFloat, size: CGSize, topMargin: CGFloat) -> CGPoint {
-        CGPoint(x: streamX, y: topMargin)
+    /// Position of a project's active-epic node.
+    ///
+    /// Encodes the proposal's signature "distance to done" cue in the stream HEIGHT: the node
+    /// stays on its stream's `streamX`, and its `y` interpolates by completion so the stream
+    /// length reads as remaining work at a glance.
+    /// - A far-from-done epic (`completionFraction` → 0) rises to `topMargin` (TALL stream).
+    /// - A nearly-done epic (`completionFraction` → 1) sits at `topMargin + band` (SHORT stream,
+    ///   "coming in to land" at the hub).
+    /// `completionFraction` is clamped to 0…1.
+    static func epicNodePosition(
+        streamX: CGFloat,
+        completionFraction: CGFloat,
+        topMargin: CGFloat,
+        band: CGFloat
+    ) -> CGPoint {
+        let f = min(max(completionFraction, 0), 1)
+        return CGPoint(x: streamX, y: topMargin + f * band)
     }
 }

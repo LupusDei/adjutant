@@ -159,11 +159,41 @@ final class MissionControlLayoutTests: XCTestCase {
         XCTAssertEqual(backlog.y, 580, accuracy: eps, "Backlog shares the base line with the hub")
     }
 
-    func testEpicNodePositionRisesToTopMarginOnItsStream() {
-        let node = MissionControlLayout.epicNodePosition(
-            streamX: 150, size: CGSize(width: 300, height: 600), topMargin: 80
-        )
-        XCTAssertEqual(node.x, 150, accuracy: eps, "Epic node stays on its stream's x")
-        XCTAssertEqual(node.y, 80, accuracy: eps, "Epic node rises to the top margin")
+    func testEpicNodeStaysOnItsStreamX() {
+        for f in [CGFloat(0), 0.3, 0.5, 1.0] {
+            let node = MissionControlLayout.epicNodePosition(streamX: 150, completionFraction: f, topMargin: 80, band: 64)
+            XCTAssertEqual(node.x, 150, accuracy: eps, "Epic node always stays on its stream's x")
+        }
+    }
+
+    func testFarFromDoneEpicRisesToTopMargin() {
+        // completion 0 → tallest stream → node at the top margin.
+        let node = MissionControlLayout.epicNodePosition(streamX: 150, completionFraction: 0, topMargin: 80, band: 64)
+        XCTAssertEqual(node.y, 80, accuracy: eps, "A far-from-done epic reaches the top (tall stream)")
+    }
+
+    func testNearlyDoneEpicSitsLowerNearHub() {
+        // completion 1 → shortest stream → node dropped by the full band toward the hub.
+        let node = MissionControlLayout.epicNodePosition(streamX: 150, completionFraction: 1, topMargin: 80, band: 64)
+        XCTAssertEqual(node.y, 144, accuracy: eps, "A done epic sits topMargin+band (short stream)")
+    }
+
+    func testHalfDoneEpicIsMidBand() {
+        let node = MissionControlLayout.epicNodePosition(streamX: 150, completionFraction: 0.5, topMargin: 80, band: 64)
+        XCTAssertEqual(node.y, 112, accuracy: eps, "Half-done → half the band")
+    }
+
+    func testEpicNodeHeightIsMonotonicInCompletion() {
+        // More complete ⇒ larger y (shorter stream) — never inverts.
+        let a = MissionControlLayout.epicNodePosition(streamX: 0, completionFraction: 0.2, topMargin: 80, band: 64).y
+        let b = MissionControlLayout.epicNodePosition(streamX: 0, completionFraction: 0.8, topMargin: 80, band: 64).y
+        XCTAssertGreaterThan(b, a, "A more-complete epic sits lower (shorter stream)")
+    }
+
+    func testEpicNodeClampsCompletionFraction() {
+        let over = MissionControlLayout.epicNodePosition(streamX: 0, completionFraction: 1.5, topMargin: 80, band: 64).y
+        let under = MissionControlLayout.epicNodePosition(streamX: 0, completionFraction: -0.5, topMargin: 80, band: 64).y
+        XCTAssertEqual(over, 144, accuracy: eps, "Over-100% clamps to the short end")
+        XCTAssertEqual(under, 80, accuracy: eps, "Negative clamps to the tall end")
     }
 }
