@@ -85,6 +85,12 @@ export const ProjectStreamRollupSchema = z.object({
   openBeadsRemaining: z.number(),
   agents: z.array(AgentMarkerSchema),
   status: ProjectRollupStatusSchema,
+  /**
+   * True when this project's live bead data could not be fetched within the
+   * per-project timeout (e.g. a cold/slow dolt) and the row is serving stale or
+   * empty fallback values. One slow project never blocks the rest of the map.
+   */
+  degraded: z.boolean().default(false),
 });
 export type ProjectStreamRollup = z.infer<typeof ProjectStreamRollupSchema>;
 

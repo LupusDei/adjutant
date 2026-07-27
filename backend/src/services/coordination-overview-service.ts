@@ -1,15 +1,22 @@
 /**
- * Coordination overview (Mission Control) rollup service — adj-208.1.2 / US1.
+ * Coordination overview (Mission Control) rollup service — adj-208.1.2 / .4.1.
  *
  * Produces the `GET /api/overview/projects` payload: one
  * {@link ProjectStreamRollup} per project (active epic + completion, remaining
  * open epics/beads, assigned agents, status beacon) plus {@link PortfolioTotals}.
  *
- * REUSE, don't re-query: this service composes the EXISTING beads/agents/question
- * read paths (`getProjectOverview`, `computeEpicProgress`, `getAgents`, the
- * question store) via injected dependencies. It adds NO second bd access path —
- * it only aggregates and derives. The dependencies are injected so the
- * aggregation is unit-testable against real bd shapes without spawning `bd`.
+ * PERFORMANCE (adj-208.4.1) — this endpoint must ALWAYS respond fast, even when a
+ * project's dolt is cold/slow. Three defenses:
+ *   1. ONE `bd list --all` per project (via injected {@link CoordinationOverviewDeps.fetchProjectBeads}),
+ *      NOT the old N×M `bd show` fan-out that serialized through the bd mutex and
+ *      hung 86s on a cold dolt. `bd list` embeds dependency edges, so epic
+ *      completion is computed from that single call (no `bd show`).
+ *   2. A per-project in-memory cache (TTL, stale-while-revalidate): a warm request
+ *      serves cached rollups instantly and refreshes in the background — no bd call
+ *      on the hot path.
+ *   3. Per-project + hard overall timeouts: a slow project degrades to stale/empty
+ *      (`degraded: true`) and NEVER blocks the others; the request always returns
+ *      within the hard deadline.
  *
  * Layer: service (business logic). The route validates + envelopes; this file
  * owns all derivation. See `.claude/rules/04-architecture.md`.
@@ -17,7 +24,9 @@
  * @module services/coordination-overview-service
  */
 import type { Project } from "./projects-service.js";
-import type { ProjectBeadsOverview, EpicProgress } from "./beads/index.js";
+import type { BeadsIssue } from "./bd-client.js";
+import { computeEpicProgressFromDeps, excludeWisps } from "./beads/index.js";
+import type { EpicProgress } from "./beads/index.js";
 import type { CrewMember, AgentQuestion } from "../types/index.js";
 import type { ServiceResult } from "../types/service-result.js";
 import type {
@@ -26,32 +35,41 @@ import type {
   ActiveEpic,
   AgentMarker,
   PortfolioTotals,
-  ProjectRollupStatus,
 } from "../types/overview-projects.js";
 
 // ============================================================================
-// Dependencies (injected for reuse + testability)
+// Dependencies + config (injected for reuse + testability)
 // ============================================================================
 
 /**
- * The existing read paths this service composes. Production wiring passes the
- * real functions (see `routes/overview.ts`); tests pass fixture-backed fakes.
+ * The read paths this service composes. Production wiring passes the real
+ * functions (see `index.ts`); tests pass fixture-backed fakes.
  */
 export interface CoordinationOverviewDeps {
   /** All registered projects (id, name, path, hasBeads). */
   listProjects: () => ServiceResult<Project[]>;
-  /** Reused: open/in-progress/blocked bead lists for a project path. */
-  getProjectOverview: (
+  /**
+   * ONE `bd list --all --json` for a project — the single cheap bead snapshot
+   * (statuses + embedded dependency edges) the rollup is derived from.
+   */
+  fetchProjectBeads: (
     projectPath: string
-  ) => Promise<ServiceResult<ProjectBeadsOverview>>;
-  /** Reused: open + in-progress epics with child completion for a project path. */
-  computeEpicProgress: (
-    projectPath: string
-  ) => Promise<ServiceResult<EpicProgress[]>>;
-  /** Reused: all agents across the fleet (matched to projects by name). */
+  ) => Promise<ServiceResult<BeadsIssue[]>>;
+  /** All agents across the fleet (matched to projects by name). */
   getAgents: () => Promise<ServiceResult<CrewMember[]>>;
-  /** Reused: open agent questions for a project (drives `needs_input`). */
+  /** Open agent questions for a project (drives `needs_input`). */
   listOpenQuestions: (projectId: string) => AgentQuestion[];
+}
+
+export interface CoordinationOverviewConfig {
+  /** How long a cached bead rollup is served before it is considered stale. */
+  cacheTtlMs?: number;
+  /** Max wait for a single project's bead fetch before it degrades. */
+  perProjectTimeoutMs?: number;
+  /** Absolute upper bound on the whole request; unfinished projects degrade. */
+  hardTimeoutMs?: number;
+  /** Injectable clock (cache TTL); defaults to `Date.now`. */
+  now?: () => number;
 }
 
 export interface CoordinationOverviewService {
@@ -59,17 +77,54 @@ export interface CoordinationOverviewService {
   getOverviewProjects: () => Promise<OverviewProjectsResponse>;
 }
 
+const DEFAULT_CACHE_TTL_MS = 30_000;
+const DEFAULT_PER_PROJECT_TIMEOUT_MS = 2_500;
+const DEFAULT_HARD_TIMEOUT_MS = 4_000;
+
 // ============================================================================
-// Internal helpers (pure)
+// Derived bead rollup (the cached, expensive-to-compute part)
+// ============================================================================
+
+/** The per-project fields derived from the bead snapshot (what we cache). */
+interface BeadRollup {
+  activeEpic: ActiveEpic | null;
+  epicsRemaining: number;
+  openBeadsRemaining: number;
+  hasBlocked: boolean;
+}
+
+const EMPTY_BEAD_ROLLUP: BeadRollup = {
+  activeEpic: null,
+  epicsRemaining: 0,
+  openBeadsRemaining: 0,
+  hasBlocked: false,
+};
+
+// ============================================================================
+// Pure helpers
 // ============================================================================
 
 /** Agent statuses that count as "active" — anything but offline. */
 const OFFLINE = "offline";
 
+/** Result of racing a promise against a deadline. */
+type Timed<T> = { timedOut: false; value: T } | { timedOut: true };
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+/** Resolve `p`, or `{ timedOut: true }` if `ms` elapses first. */
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<Timed<T>> {
+  return Promise.race([
+    p.then((value): Timed<T> => ({ timedOut: false, value })),
+    delay(ms).then((): Timed<T> => ({ timedOut: true })),
+  ]);
+}
+
 /**
- * Normalize the reused `EpicProgress.completionPercent` — which is a FRACTION
- * in [0, 1] despite its name — to an integer 0–100 for the API contract.
- * Clamped so malformed inputs can never emit out-of-range values.
+ * Normalize `EpicProgress.completionPercent` (a FRACTION in [0,1] despite the
+ * name) to an integer 0–100, clamped so malformed inputs stay in range.
  */
 function toPercent(fraction: number): number {
   if (!Number.isFinite(fraction)) return 0;
@@ -77,13 +132,12 @@ function toPercent(fraction: number): number {
 }
 
 /**
- * Select the active epic: the epic currently holding in-progress work. Among
- * in-progress epics we take the most-progressed one (the reused list is already
- * sorted by completion desc) as the proxy for "most recent activity", since the
- * reused `EpicProgress` shape carries no timestamp. `null` when none is active.
+ * The active epic: the in-progress epic with the most completed work (the list
+ * is pre-sorted by completion desc) as the proxy for "most recent activity",
+ * since the bead snapshot carries no per-epic activity timestamp. `null` if none.
  */
-function pickActiveEpic(epics: EpicProgress[]): ActiveEpic | null {
-  const active = epics.find((e) => e.status === "in_progress");
+function pickActiveEpic(sortedProgress: EpicProgress[]): ActiveEpic | null {
+  const active = sortedProgress.find((e) => e.status === "in_progress");
   if (!active) return null;
   return {
     id: active.id,
@@ -94,74 +148,162 @@ function pickActiveEpic(epics: EpicProgress[]): ActiveEpic | null {
   };
 }
 
-/** Count of open, not-started epics (the map's backlog indicator). */
-function countEpicsRemaining(epics: EpicProgress[]): number {
-  return epics.filter((e) => e.status === "open").length;
-}
-
 /**
- * Derive the status beacon: `blocked` if any bead is blocked; else
- * `needs_input` if there is an open question; else `on_track`.
+ * Derive the per-project rollup from ONE `bd list --all` snapshot. Pure and
+ * exported for direct unit testing against real bd-list shapes (Rule 1).
+ *
+ * `bd list` embeds each issue's dependency edges, so epic completion is computed
+ * via the reused {@link computeEpicProgressFromDeps} (list-tuple branch) — no
+ * `bd show` needed.
  */
-function deriveStatus(
-  overview: ProjectBeadsOverview,
-  openQuestionCount: number
-): ProjectRollupStatus {
-  // `getProjectOverview` merges blocked beads into `inProgress`; open beads are
-  // status=open only. Check both defensively so any blocked bead trips the beacon.
-  const hasBlocked =
-    overview.inProgress.some((b) => b.status === "blocked") ||
-    overview.open.some((b) => b.status === "blocked");
-  if (hasBlocked) return "blocked";
-  if (openQuestionCount > 0) return "needs_input";
-  return "on_track";
-}
+export function rollupFromBeads(rawBeads: BeadsIssue[]): BeadRollup {
+  const beads = excludeWisps(rawBeads);
 
-const EMPTY_OVERVIEW: ProjectBeadsOverview = {
-  open: [],
-  inProgress: [],
-  recentlyClosed: [],
-};
+  const statusMap = new Map<string, string>();
+  for (const b of beads) statusMap.set(b.id, b.status);
+
+  const epics: BeadsIssue[] = [];
+  let openBeadsRemaining = 0;
+  let hasBlocked = false;
+
+  for (const b of beads) {
+    // Spec: any bead in the project with status=blocked trips the beacon.
+    if (b.status === "blocked") hasBlocked = true;
+    if (b.issue_type === "epic") {
+      epics.push(b);
+      continue;
+    }
+    if (b.status === "open") openBeadsRemaining += 1;
+  }
+
+  const progress = epics
+    .filter((e) => e.status === "open" || e.status === "in_progress")
+    .map((e) => computeEpicProgressFromDeps(e, e.dependencies ?? [], statusMap))
+    .sort((a, b) => b.completionPercent - a.completionPercent);
+
+  return {
+    activeEpic: pickActiveEpic(progress),
+    epicsRemaining: progress.filter((e) => e.status === "open").length,
+    openBeadsRemaining,
+    hasBlocked,
+  };
+}
 
 // ============================================================================
 // Factory
 // ============================================================================
 
-/**
- * Create a coordination overview service bound to the given read paths.
- */
 export function createCoordinationOverviewService(
-  deps: CoordinationOverviewDeps
+  deps: CoordinationOverviewDeps,
+  config: CoordinationOverviewConfig = {}
 ): CoordinationOverviewService {
-  /** Build the rollup for a single project (never throws — degrades to empty). */
-  async function rollupProject(
-    proj: Project,
-    agentsByProjectName: Map<string, AgentMarker[]>
-  ): Promise<ProjectStreamRollup> {
-    // Only spend a bd call when the project actually has a beads database.
-    let overview: ProjectBeadsOverview = EMPTY_OVERVIEW;
-    let epics: EpicProgress[] = [];
+  const cacheTtlMs = config.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+  const perProjectTimeoutMs =
+    config.perProjectTimeoutMs ?? DEFAULT_PER_PROJECT_TIMEOUT_MS;
+  const hardTimeoutMs = config.hardTimeoutMs ?? DEFAULT_HARD_TIMEOUT_MS;
+  const now = config.now ?? Date.now;
 
-    if (proj.hasBeads) {
-      const [overviewRes, epicsRes] = await Promise.all([
-        deps.getProjectOverview(proj.path),
-        deps.computeEpicProgress(proj.path),
-      ]);
-      if (overviewRes.success && overviewRes.data) overview = overviewRes.data;
-      if (epicsRes.success && epicsRes.data) epics = epicsRes.data;
+  /** Per-project cache of the expensive bead-derived rollup. */
+  interface CacheEntry {
+    data: BeadRollup;
+    fetchedAt: number;
+    refreshing: boolean;
+  }
+  const cache = new Map<string, CacheEntry>();
+
+  /** Last-good agents snapshot, so a slow `getAgents` never flashes empty. */
+  let lastAgents = new Map<string, AgentMarker[]>();
+
+  /** Fetch + derive a project's bead rollup; null on bd error. */
+  async function fetchBeadRollup(proj: Project): Promise<BeadRollup | null> {
+    const res = await deps.fetchProjectBeads(proj.path);
+    if (!res.success || !res.data) return null;
+    return rollupFromBeads(res.data);
+  }
+
+  /** Background stale-while-revalidate refresh; updates cache, swallows errors. */
+  function scheduleRefresh(proj: Project): void {
+    const entry = cache.get(proj.id);
+    if (entry?.refreshing) return;
+    if (entry) entry.refreshing = true;
+    void (async () => {
+      const result = await withDeadline(fetchBeadRollup(proj), perProjectTimeoutMs);
+      if (!result.timedOut && result.value !== null) {
+        cache.set(proj.id, { data: result.value, fetchedAt: now(), refreshing: false });
+      } else {
+        const e = cache.get(proj.id);
+        if (e) e.refreshing = false; // keep stale data; retry next request
+      }
+    })();
+  }
+
+  /**
+   * Resolve a project's bead rollup honoring the cache + per-project timeout.
+   * Never throws. `degraded` is true when serving empty fallback after a
+   * cold-cache timeout/failure.
+   */
+  async function ensureBeadRollup(
+    proj: Project
+  ): Promise<{ data: BeadRollup; degraded: boolean }> {
+    if (!proj.hasBeads) return { data: EMPTY_BEAD_ROLLUP, degraded: false };
+
+    const entry = cache.get(proj.id);
+    const age = entry ? now() - entry.fetchedAt : Number.POSITIVE_INFINITY;
+
+    if (entry && age < cacheTtlMs) {
+      return { data: entry.data, degraded: false }; // fresh — instant
+    }
+    if (entry) {
+      // Stale-while-revalidate: serve stale instantly, refresh in background.
+      scheduleRefresh(proj);
+      return { data: entry.data, degraded: false };
     }
 
-    const openQuestions = deps.listOpenQuestions(proj.id);
+    // Cold cache — fetch inline, bounded by the per-project timeout.
+    const result = await withDeadline(fetchBeadRollup(proj), perProjectTimeoutMs);
+    if (!result.timedOut && result.value !== null) {
+      cache.set(proj.id, { data: result.value, fetchedAt: now(), refreshing: false });
+      return { data: result.value, degraded: false };
+    }
+    return { data: EMPTY_BEAD_ROLLUP, degraded: true };
+  }
 
+  function buildRollup(
+    proj: Project,
+    bead: BeadRollup,
+    degraded: boolean,
+    agentsByProjectName: Map<string, AgentMarker[]>,
+    openQuestionCount: number
+  ): ProjectStreamRollup {
     return {
       projectId: proj.id,
       name: proj.name,
-      activeEpic: pickActiveEpic(epics),
-      epicsRemaining: countEpicsRemaining(epics),
-      openBeadsRemaining: overview.open.length,
+      activeEpic: bead.activeEpic,
+      epicsRemaining: bead.epicsRemaining,
+      openBeadsRemaining: bead.openBeadsRemaining,
       agents: agentsByProjectName.get(proj.name) ?? [],
-      status: deriveStatus(overview, openQuestions.length),
+      status: bead.hasBlocked
+        ? "blocked"
+        : openQuestionCount > 0
+          ? "needs_input"
+          : "on_track",
+      degraded,
     };
+  }
+
+  /** Fetch agents (bounded); index by project name; fall back to last-good. */
+  async function loadAgents(): Promise<Map<string, AgentMarker[]>> {
+    const res = await withDeadline(deps.getAgents(), perProjectTimeoutMs);
+    if (res.timedOut || !res.value.success || !res.value.data) return lastAgents;
+    const byName = new Map<string, AgentMarker[]>();
+    for (const a of res.value.data) {
+      if (!a.project) continue;
+      const list = byName.get(a.project) ?? [];
+      list.push({ id: a.id, status: a.status });
+      byName.set(a.project, list);
+    }
+    lastAgents = byName;
+    return byName;
   }
 
   async function getOverviewProjects(): Promise<OverviewProjectsResponse> {
@@ -174,20 +316,30 @@ export function createCoordinationOverviewService(
     }
     const projects = projectsRes.data;
 
-    // Agents are global; index them by project name (how `getAgents` labels them).
-    const agentsRes = await deps.getAgents();
-    const agentsByProjectName = new Map<string, AgentMarker[]>();
-    if (agentsRes.success && agentsRes.data) {
-      for (const a of agentsRes.data) {
-        if (!a.project) continue;
-        const list = agentsByProjectName.get(a.project) ?? [];
-        list.push({ id: a.id, status: a.status });
-        agentsByProjectName.set(a.project, list);
-      }
-    }
+    const agentsByProjectName = await loadAgents();
+
+    // Absolute deadline: every project resolves by here (real, stale, or empty),
+    // so the endpoint always responds within the hard timeout.
+    const deadline = now() + hardTimeoutMs;
 
     const rollups = await Promise.all(
-      projects.map((p) => rollupProject(p, agentsByProjectName))
+      projects.map(async (proj): Promise<ProjectStreamRollup> => {
+        const openQuestions = deps.listOpenQuestions(proj.id);
+        const remaining = Math.max(0, deadline - now());
+        const raced = await withDeadline(ensureBeadRollup(proj), remaining);
+        if (raced.timedOut) {
+          // Hard deadline hit — serve last-known (stale) or empty, marked degraded.
+          const data = cache.get(proj.id)?.data ?? EMPTY_BEAD_ROLLUP;
+          return buildRollup(proj, data, true, agentsByProjectName, openQuestions.length);
+        }
+        return buildRollup(
+          proj,
+          raced.value.data,
+          raced.value.degraded,
+          agentsByProjectName,
+          openQuestions.length
+        );
+      })
     );
 
     return { projects: rollups, totals: computeTotals(rollups) };

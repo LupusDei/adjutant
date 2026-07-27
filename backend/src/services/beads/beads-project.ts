@@ -17,6 +17,59 @@ import { excludeWisps } from "./beads-filter.js";
 import { computeEpicProgressFromDeps, transformClosedEpics } from "./beads-dependency.js";
 
 // ============================================================================
+// Lean single-call snapshot (adj-208.4.1)
+// ============================================================================
+
+/**
+ * Fetches a project's entire bead set in ONE `bd list --all --json` call.
+ *
+ * This is the cheap primitive behind the Mission Control rollup: `bd list`
+ * embeds each issue's dependency EDGES ({issue_id, depends_on_id, type}), so a
+ * single call yields statuses AND epic→child links — enough to compute open
+ * counts, blocked state, and epic completion WITHOUT the per-epic `bd show`
+ * fan-out that serialized through the bd mutex and hung on a cold dolt.
+ *
+ * A short `timeoutMs` is forwarded to `execBd`, which kills the bd process and
+ * releases the mutex on timeout — so one slow project can never wedge the queue.
+ *
+ * @param projectPath - Project directory containing `.beads/`.
+ * @param options.limit - Max issues to fetch (default 1000; headroom for child
+ *   status/linkage without an unbounded scan).
+ * @param options.timeoutMs - Per-call timeout forwarded to `execBd`.
+ */
+export async function listAllProjectBeads(
+  projectPath: string,
+  options: { limit?: number; timeoutMs?: number } = {}
+): Promise<BeadsServiceResult<BeadsIssue[]>> {
+  try {
+    const beadsDir = resolveBeadsDir(projectPath);
+    const res = await execBd<BeadsIssue[]>(
+      ["list", "--all", "--json", "--limit", String(options.limit ?? 1000)],
+      {
+        cwd: projectPath,
+        beadsDir,
+        ...(options.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+      }
+    );
+    if (!res.success || !res.data) {
+      return {
+        success: false,
+        error: res.error ?? { code: "LIST_ALL_ERROR", message: "bd list --all failed" },
+      };
+    }
+    return { success: true, data: res.data };
+  } catch (err) {
+    return {
+      success: false,
+      error: {
+        code: "LIST_ALL_ERROR",
+        message: err instanceof Error ? err.message : "Failed to list project beads",
+      },
+    };
+  }
+}
+
+// ============================================================================
 // Project Overview
 // ============================================================================
 

@@ -36,6 +36,7 @@ const SAMPLE: OverviewProjectsResponse = {
       openBeadsRemaining: 3,
       agents: [{ id: "A1", status: "working" }],
       status: "on_track",
+      degraded: false,
     },
   ],
   totals: {
