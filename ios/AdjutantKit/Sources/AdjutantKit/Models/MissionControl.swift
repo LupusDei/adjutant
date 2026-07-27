@@ -49,6 +49,20 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
     /// Prefer ``statusKind`` for branching.
     public let status: String
 
+    /// The project's in-progress epics/features, each with its own completion, agents,
+    /// and ``FeatureRollup/activityLevel`` (epic adj-209, US2). Empty when the backend
+    /// emits no `features` key (old adj-208 payloads) or the project has none.
+    public let features: [FeatureRollup]
+
+    /// Composite agentic-intensity for the whole project, normalized `0...1`
+    /// (active agents + recent `report_progress` cadence + in-progress bead count).
+    /// Drives the "busier = hotter" map encoding. Defaults to `0` when absent.
+    public let activityLevel: Double
+
+    /// Uncapped count of active agents on this project (adj-209 removes the old 5-dot
+    /// cap). Falls back to `agents.count` when the backend omits the key.
+    public let agentCount: Int
+
     /// `Identifiable` conformance keyed on the project UUID.
     public var id: String { projectId }
 
@@ -64,7 +78,10 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
         epicsRemaining: Int,
         openBeadsRemaining: Int,
         agents: [ProjectAgent],
-        status: String
+        status: String,
+        features: [FeatureRollup] = [],
+        activityLevel: Double = 0,
+        agentCount: Int? = nil
     ) {
         self.projectId = projectId
         self.name = name
@@ -73,6 +90,104 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
         self.openBeadsRemaining = openBeadsRemaining
         self.agents = agents
         self.status = status
+        self.features = features
+        self.activityLevel = activityLevel
+        // Uncapped count; when unspecified, the assigned-agent list is the best proxy.
+        self.agentCount = agentCount ?? agents.count
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case projectId, name, activeEpic, epicsRemaining, openBeadsRemaining
+        case agents, status, features, activityLevel, agentCount
+    }
+
+    /// Tolerant decode: the adj-209 fields (`features`, `activityLevel`, `agentCount`)
+    /// are ADDITIVE, so a payload without them (old adj-208 shape, or a partial rollout)
+    /// still decodes — `features` → `[]`, `activityLevel` → `0`, `agentCount` →
+    /// `agents.count`. Unknown keys are ignored by `KeyedDecodingContainer`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        projectId = try c.decode(String.self, forKey: .projectId)
+        name = try c.decode(String.self, forKey: .name)
+        activeEpic = try c.decodeIfPresent(ActiveEpic.self, forKey: .activeEpic)
+        epicsRemaining = try c.decodeIfPresent(Int.self, forKey: .epicsRemaining) ?? 0
+        openBeadsRemaining = try c.decodeIfPresent(Int.self, forKey: .openBeadsRemaining) ?? 0
+        let decodedAgents = try c.decodeIfPresent([ProjectAgent].self, forKey: .agents) ?? []
+        agents = decodedAgents
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? ProjectRollupStatus.unknown.rawValue
+        features = try c.decodeIfPresent([FeatureRollup].self, forKey: .features) ?? []
+        activityLevel = try c.decodeIfPresent(Double.self, forKey: .activityLevel) ?? 0
+        agentCount = try c.decodeIfPresent(Int.self, forKey: .agentCount) ?? decodedAgents.count
+    }
+}
+
+// MARK: - FeatureRollup
+
+/// One in-progress feature/epic node inside a project stream (epic adj-209, US2).
+///
+/// Each node carries its own completion, the agents working it, a coordination
+/// ``status``, and a composite ``activityLevel`` (`0...1`) that drives the map's
+/// per-feature "busier = hotter" encoding (thickness/brightness, flow speed, glow).
+/// Shares ``ProjectAgent`` and ``ProjectRollupStatus`` with the project rollup so the
+/// map renders project- and feature-level markers identically.
+public struct FeatureRollup: Codable, Equatable, Identifiable {
+    /// Feature/epic bead id (e.g. `"adj-209.2"`), also the `Identifiable` id.
+    public let id: String
+    public let title: String
+    /// Completion of the feature's children as an integer percent, 0–100.
+    /// (Typed `Double` to tolerate drift and feed the completion-ring math directly.)
+    public let completionPercent: Double
+    public let closedChildren: Int
+    public let totalChildren: Int
+    /// Agents currently working this feature node.
+    public let agents: [ProjectAgent]
+    /// Composite agentic-intensity for this feature, normalized `0...1`.
+    public let activityLevel: Double
+    /// Raw coordination status; prefer ``statusKind`` for branching.
+    public let status: String
+
+    /// Typed, defensive view of ``status`` — unknown raw values map to ``ProjectRollupStatus/unknown``.
+    public var statusKind: ProjectRollupStatus {
+        ProjectRollupStatus(rawValue: status) ?? .unknown
+    }
+
+    public init(
+        id: String,
+        title: String,
+        completionPercent: Double,
+        closedChildren: Int,
+        totalChildren: Int,
+        agents: [ProjectAgent],
+        activityLevel: Double,
+        status: String
+    ) {
+        self.id = id
+        self.title = title
+        self.completionPercent = completionPercent
+        self.closedChildren = closedChildren
+        self.totalChildren = totalChildren
+        self.agents = agents
+        self.activityLevel = activityLevel
+        self.status = status
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, completionPercent, closedChildren, totalChildren
+        case agents, activityLevel, status
+    }
+
+    /// Tolerant decode: `id` is required (a node needs identity); every other field
+    /// defaults so a partial payload never throws and unknown keys are ignored.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        completionPercent = try c.decodeIfPresent(Double.self, forKey: .completionPercent) ?? 0
+        closedChildren = try c.decodeIfPresent(Int.self, forKey: .closedChildren) ?? 0
+        totalChildren = try c.decodeIfPresent(Int.self, forKey: .totalChildren) ?? 0
+        agents = try c.decodeIfPresent([ProjectAgent].self, forKey: .agents) ?? []
+        activityLevel = try c.decodeIfPresent(Double.self, forKey: .activityLevel) ?? 0
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? ProjectRollupStatus.unknown.rawValue
     }
 }
 

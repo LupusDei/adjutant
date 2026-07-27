@@ -213,3 +213,206 @@ final class MissionControlModelTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 }
+
+// MARK: - Per-feature intensity (epic adj-209, US2 / adj-209.2.1)
+//
+// US1 extends each project with:
+//   features: [{ id, title, completionPercent, closedChildren, totalChildren,
+//               agents: [{ id, status }], activityLevel (Double 0..1), status }]
+//   activityLevel (Double 0..1)  — project-level composite intensity
+//   agentCount (Int)             — uncapped active-agent count
+//
+// The models are ADDITIVE and tolerant: old adj-208 payloads (no features /
+// activityLevel / agentCount) must still decode — `features` defaults to `[]`,
+// `activityLevel` to `0`, and `agentCount` falls back to `agents.count`. Unknown
+// keys are ignored. These tests lock that contract against REAL JSON shapes.
+extension MissionControlModelTests {
+
+    // A project carrying two feature nodes with differing intensity, project-level
+    // activityLevel + agentCount, plus one unknown key the decoder must ignore.
+    fileprivate static let featureDataJSON = """
+    {
+      "projects": [
+        {
+          "projectId": "0e578d15-1111-2222-3333-444455556666",
+          "name": "adjutant",
+          "activeEpic": {
+            "id": "adj-209",
+            "title": "Mission Control — selection + intensity",
+            "completionPercent": 30,
+            "closedChildren": 3,
+            "totalChildren": 10
+          },
+          "epicsRemaining": 2,
+          "openBeadsRemaining": 19,
+          "agents": [
+            { "id": "eng209-ios-data", "status": "working" },
+            { "id": "eng209-backend", "status": "working" }
+          ],
+          "status": "on_track",
+          "activityLevel": 0.82,
+          "agentCount": 7,
+          "features": [
+            {
+              "id": "adj-209.2",
+              "title": "iOS data layer",
+              "completionPercent": 66,
+              "closedChildren": 2,
+              "totalChildren": 3,
+              "agents": [
+                { "id": "eng209-ios-data", "status": "working" }
+              ],
+              "activityLevel": 0.9,
+              "status": "on_track"
+            },
+            {
+              "id": "adj-209.4",
+              "title": "Map intensity",
+              "completionPercent": 0,
+              "closedChildren": 0,
+              "totalChildren": 3,
+              "agents": [],
+              "activityLevel": 0.1,
+              "status": "needs_input"
+            }
+          ],
+          "futureUnknownKey": "ignored"
+        }
+      ],
+      "totals": {
+        "projects": 1,
+        "agentsActive": 2,
+        "epicsRemaining": 2,
+        "openBeadsRemaining": 19,
+        "blocked": 0,
+        "needsInput": 0,
+        "portfolioCompletionPercent": 30
+      }
+    }
+    """
+
+    fileprivate func decodeFeatureSample() throws -> OverviewProjectsResponse {
+        let data = Self.featureDataJSON.data(using: .utf8)!
+        return try JSONDecoder().decode(OverviewProjectsResponse.self, from: data)
+    }
+
+    // MARK: - Project-level new fields
+
+    func testDecodesProjectActivityLevelAndAgentCount() throws {
+        let project = try decodeFeatureSample().projects[0]
+        XCTAssertEqual(project.activityLevel, 0.82, accuracy: 0.0001,
+                       "project activityLevel is a composite 0..1 Double")
+        XCTAssertEqual(project.agentCount, 7, "agentCount is the uncapped active-agent count")
+    }
+
+    // MARK: - features[]
+
+    func testDecodesFeaturesArray() throws {
+        let project = try decodeFeatureSample().projects[0]
+        XCTAssertEqual(project.features.count, 2, "both in-progress feature nodes decode")
+    }
+
+    func testDecodesFeatureRollupFields() throws {
+        let feature = try decodeFeatureSample().projects[0].features[0]
+        XCTAssertEqual(feature.id, "adj-209.2")
+        XCTAssertEqual(feature.title, "iOS data layer")
+        XCTAssertEqual(feature.completionPercent, 66, accuracy: 0.0001,
+                       "completionPercent is an integer 0–100")
+        XCTAssertEqual(feature.closedChildren, 2)
+        XCTAssertEqual(feature.totalChildren, 3)
+        XCTAssertEqual(feature.activityLevel, 0.9, accuracy: 0.0001,
+                       "feature activityLevel is a composite 0..1 Double")
+        XCTAssertEqual(feature.status, "on_track")
+    }
+
+    func testDecodesFeatureAgents() throws {
+        let feature = try decodeFeatureSample().projects[0].features[0]
+        XCTAssertEqual(feature.agents.count, 1)
+        XCTAssertEqual(feature.agents[0].id, "eng209-ios-data")
+        XCTAssertEqual(feature.agents[0].status, "working")
+    }
+
+    func testDecodesFeatureWithEmptyAgents() throws {
+        let feature = try decodeFeatureSample().projects[0].features[1]
+        XCTAssertEqual(feature.id, "adj-209.4")
+        XCTAssertTrue(feature.agents.isEmpty, "empty agents array decodes to []")
+        XCTAssertEqual(feature.completionPercent, 0, accuracy: 0.0001)
+        XCTAssertEqual(feature.activityLevel, 0.1, accuracy: 0.0001)
+    }
+
+    func testFeatureRollupIsIdentifiableById() throws {
+        let feature = try decodeFeatureSample().projects[0].features[0]
+        XCTAssertEqual(feature.id, "adj-209.2", "FeatureRollup is Identifiable by its bead id")
+    }
+
+    func testFeatureStatusKindMapsKnownAndUnknown() throws {
+        let features = try decodeFeatureSample().projects[0].features
+        XCTAssertEqual(features[0].statusKind, .onTrack)
+        XCTAssertEqual(features[1].statusKind, .needsInput)
+    }
+
+    func testFeatureStatusKindFallsBackToUnknown() throws {
+        let json = """
+        {
+          "id": "f", "title": "t", "completionPercent": 0,
+          "closedChildren": 0, "totalChildren": 0, "agents": [],
+          "activityLevel": 0.5, "status": "some_future_status"
+        }
+        """.data(using: .utf8)!
+        let feature = try JSONDecoder().decode(FeatureRollup.self, from: json)
+        XCTAssertEqual(feature.status, "some_future_status", "raw status preserved")
+        XCTAssertEqual(feature.statusKind, .unknown, "unknown raw maps to .unknown, never throws")
+    }
+
+    // MARK: - Backward compatibility (old adj-208 payload, no new fields)
+
+    func testMissingFeaturesDefaultsToEmpty() throws {
+        // Uses the ORIGINAL adj-208 sample (no features / activityLevel / agentCount).
+        let response = try decodeSample()
+        let adjutant = response.projects[0]
+        XCTAssertTrue(adjutant.features.isEmpty,
+                      "missing features[] decodes to [] — old payloads stay valid")
+        XCTAssertEqual(adjutant.activityLevel, 0, accuracy: 0.0001,
+                       "missing activityLevel defaults to 0")
+    }
+
+    func testMissingAgentCountFallsBackToAgentsCount() throws {
+        // Old adjutant project has 2 agents and no explicit agentCount.
+        let adjutant = try decodeSample().projects[0]
+        XCTAssertEqual(adjutant.agentCount, adjutant.agents.count,
+                       "missing agentCount falls back to agents.count (2)")
+        XCTAssertEqual(adjutant.agentCount, 2)
+    }
+
+    // MARK: - Unknown keys are ignored (forward compatibility)
+
+    func testUnknownKeysAreIgnored() throws {
+        // featureDataJSON contains "futureUnknownKey" — decode must not throw.
+        XCTAssertNoThrow(try decodeFeatureSample(),
+                         "unknown keys in the payload must be tolerated")
+    }
+
+    // MARK: - Envelope-aware decode with features
+
+    func testDecodesFeaturePayloadInsideApiResponseEnvelope() throws {
+        let enveloped = """
+        {
+          "success": true,
+          "data": \(Self.featureDataJSON),
+          "timestamp": "2026-07-27T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+        let envelope = try JSONDecoder().decode(ApiResponse<OverviewProjectsResponse>.self, from: enveloped)
+        let payload = try XCTUnwrap(envelope.data)
+        XCTAssertEqual(payload.projects[0].features.count, 2)
+        XCTAssertEqual(payload.projects[0].activityLevel, 0.82, accuracy: 0.0001)
+    }
+
+    // MARK: - Equatable (feature payload)
+
+    func testFeaturePayloadIsEquatable() throws {
+        let a = try decodeFeatureSample()
+        let b = try decodeFeatureSample()
+        XCTAssertEqual(a, b)
+    }
+}
