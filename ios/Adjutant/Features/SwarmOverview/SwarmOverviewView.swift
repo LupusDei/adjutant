@@ -13,8 +13,6 @@ struct SwarmOverviewView: View {
     @State private var segment: MissionControlSegment = .defaultSegment
     /// Drives the Mission Control map: loading/loaded/error + pull-to-refresh + ~30s poll.
     @StateObject private var missionControl = MissionControlViewModel()
-    /// Presents the project-selector sheet (adj-209.3.2).
-    @State private var showingProjectFilter = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -78,119 +76,11 @@ struct SwarmOverviewView: View {
 
     // MARK: - Mission Control (adj-208.3.4)
 
-    /// The Mission Control map segment: native `MissionControlMapView` driven by
-    /// `MissionControlViewModel`, with pull-to-refresh and a ~30s poll that runs ONLY while
-    /// this segment is on screen (started/stopped by its `onAppear`/`onDisappear`). The map itself
-    /// is view-only; the project FILTER (adj-209.3.2) narrows which projects the VM fetches.
+    /// The Mission Control segment — the self-contained ``MissionControlTabView`` (map +
+    /// per-feature intensity + project selector). Extracted from this screen (adj-209.3.2.1) so
+    /// the feature is independently typecheckable and can't ripple into the Summary dashboard.
     private var missionControlContent: some View {
-        VStack(spacing: 0) {
-            projectFilterBar
-            GeometryReader { geo in
-                ScrollView {
-                    missionControlMap(height: max(geo.size.height, 480))
-                        .frame(width: geo.size.width)
-                }
-                .refreshable { await missionControl.refresh() }
-            }
-        }
-        .onAppear { missionControl.onAppear() }
-        .onDisappear { missionControl.onDisappear() }
-        .sheet(isPresented: $showingProjectFilter) {
-            // Decoupled selector: pure model in, closures out. The VM owns/persists the selection
-            // (adj-209.2.3) and re-fetches with the derived projectIds; this view stays stateless.
-            MissionControlSelectorView(
-                model: MissionControlSelectorModel(
-                    projects: missionControl.availableProjects.map {
-                        MissionControlSelectorModel.Project(id: $0.id, name: $0.name)
-                    },
-                    selection: missionControl.selection
-                ),
-                onSelectAll: { missionControl.selectAllProjects() },
-                onDeselectAll: { missionControl.deselectAllProjects() },
-                onToggle: { missionControl.toggleProject($0) },
-                onDone: { showingProjectFilter = false }
-            )
-            .presentationDetents([.medium, .large])
-        }
-    }
-
-    /// A compact filter trigger above the map: shows the current selection summary and opens the
-    /// project selector sheet. Hidden until at least one project is known.
-    @ViewBuilder
-    private var projectFilterBar: some View {
-        if !missionControl.availableProjects.isEmpty {
-            let model = MissionControlSelectorModel(
-                projects: missionControl.availableProjects.map {
-                    MissionControlSelectorModel.Project(id: $0.id, name: $0.name)
-                },
-                selection: missionControl.selection
-            )
-            HStack {
-                Spacer()
-                Button {
-                    showingProjectFilter = true
-                } label: {
-                    HStack(spacing: CRTTheme.Spacing.xs) {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 13, weight: .semibold))
-                        CRTText(model.summary, style: .caption, color: CRTTheme.Brand.cyanText)
-                    }
-                    .foregroundColor(CRTTheme.Brand.cyanText)
-                    .padding(.horizontal, CRTTheme.Spacing.sm)
-                    .padding(.vertical, CRTTheme.Spacing.xs)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: CRTTheme.CornerRadius.sm)
-                            .stroke(CRTTheme.Brand.cyan.opacity(0.6), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Filter projects. \(model.summary)")
-            }
-            .padding(.horizontal, CRTTheme.Spacing.md)
-            .padding(.vertical, CRTTheme.Spacing.sm)
-        }
-    }
-
-    @ViewBuilder
-    private func missionControlMap(height: CGFloat) -> some View {
-        if let rollup = missionControl.rollup {
-            // Non-nil rollup (possibly empty projects — the map renders its own empty state).
-            MissionControlMapView(projects: rollup.projects, totals: rollup.totals)
-                .frame(height: height)
-        } else {
-            switch missionControl.state {
-            case .error(let message):
-                mcErrorView(message).frame(height: height)
-            default:  // .loading (or the impossible loaded-without-rollup) → spinner
-                mcLoadingView.frame(height: height)
-            }
-        }
-    }
-
-    private var mcLoadingView: some View {
-        VStack(spacing: CRTTheme.Spacing.md) {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: theme.primary))
-                .scaleEffect(1.3)
-            CRTText("LOADING MISSION CONTROL...", style: .caption, color: theme.dim)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func mcErrorView(_ message: String) -> some View {
-        VStack(spacing: CRTTheme.Spacing.md) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 40))
-                .foregroundColor(CRTTheme.State.warning)
-            CRTText("MISSION CONTROL UNAVAILABLE", style: .subheader, color: CRTTheme.State.warning)
-            CRTText(message, style: .caption, color: theme.dim)
-                .multilineTextAlignment(.center)
-            CRTButton("RETRY", variant: .secondary, size: .medium) {
-                Task<Void, Never> { await missionControl.refresh() }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(CRTTheme.Spacing.lg)
+        MissionControlTabView(viewModel: missionControl)
     }
 
     // MARK: - Content
