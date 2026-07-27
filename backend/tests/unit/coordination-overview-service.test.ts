@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import {
   createCoordinationOverviewService,
   rollupFromBeads,
+  computeActivityLevel,
 } from "../../src/services/coordination-overview-service.js";
 import type { CoordinationOverviewDeps } from "../../src/services/coordination-overview-service.js";
 import type { BeadsIssue } from "../../src/services/bd-client.js";
@@ -84,6 +85,8 @@ function makeDeps(config: {
   scenarioByPath?: Record<string, string>;
   agents?: CrewMember[];
   questionsByProjectId?: Record<string, AgentQuestion[]>;
+  /** Recent `report_progress` count per agent id (activity cadence signal). */
+  recentProgressCounts?: Record<string, number>;
   overrides?: Partial<CoordinationOverviewDeps>;
 }): CoordinationOverviewDeps {
   const scenarioByPath = config.scenarioByPath ?? {};
@@ -97,9 +100,81 @@ function makeDeps(config: {
     listOpenQuestions: vi.fn(
       (projectId: string) => config.questionsByProjectId?.[projectId] ?? []
     ),
+    ...(config.recentProgressCounts
+      ? {
+          getRecentProgressCounts: vi.fn(
+            () => new Map(Object.entries(config.recentProgressCounts!))
+          ),
+        }
+      : {}),
     ...config.overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// computeActivityLevel (pure composite) — adj-209.1.2
+// ---------------------------------------------------------------------------
+
+describe("computeActivityLevel", () => {
+  it("should be 0 when there is no agentic work", () => {
+    expect(
+      computeActivityLevel({
+        engagedAgents: 0,
+        inProgressBeads: 0,
+        recentProgressReports: 0,
+      })
+    ).toBe(0);
+  });
+
+  it("should rise monotonically with engaged-agent count", () => {
+    const one = computeActivityLevel({ engagedAgents: 1, inProgressBeads: 0, recentProgressReports: 0 });
+    const two = computeActivityLevel({ engagedAgents: 2, inProgressBeads: 0, recentProgressReports: 0 });
+    const three = computeActivityLevel({ engagedAgents: 3, inProgressBeads: 0, recentProgressReports: 0 });
+    expect(one).toBeGreaterThan(0);
+    expect(two).toBeGreaterThan(one);
+    expect(three).toBeGreaterThan(two);
+  });
+
+  it("should rise with in-progress bead count", () => {
+    const lo = computeActivityLevel({ engagedAgents: 0, inProgressBeads: 1, recentProgressReports: 0 });
+    const hi = computeActivityLevel({ engagedAgents: 0, inProgressBeads: 4, recentProgressReports: 0 });
+    expect(lo).toBeGreaterThan(0);
+    expect(hi).toBeGreaterThan(lo);
+  });
+
+  it("should rise with recent report_progress cadence", () => {
+    const lo = computeActivityLevel({ engagedAgents: 0, inProgressBeads: 0, recentProgressReports: 1 });
+    const hi = computeActivityLevel({ engagedAgents: 0, inProgressBeads: 0, recentProgressReports: 6 });
+    expect(lo).toBeGreaterThan(0);
+    expect(hi).toBeGreaterThan(lo);
+  });
+
+  it("should treat the three signals as additive (all > any one alone)", () => {
+    const agentsOnly = computeActivityLevel({ engagedAgents: 1, inProgressBeads: 0, recentProgressReports: 0 });
+    const all = computeActivityLevel({ engagedAgents: 1, inProgressBeads: 1, recentProgressReports: 1 });
+    expect(all).toBeGreaterThan(agentsOnly);
+  });
+
+  it("should stay in [0,1] with real headroom — never pins to 1", () => {
+    const maxed = computeActivityLevel({
+      engagedAgents: 1000,
+      inProgressBeads: 1000,
+      recentProgressReports: 1000,
+    });
+    expect(maxed).toBeGreaterThan(0.9);
+    expect(maxed).toBeLessThan(1);
+  });
+
+  it("should clamp negative inputs to 0 (never below the floor)", () => {
+    expect(
+      computeActivityLevel({
+        engagedAgents: -5,
+        inProgressBeads: -2,
+        recentProgressReports: -3,
+      })
+    ).toBe(0);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // rollupFromBeads (pure)
@@ -118,6 +193,30 @@ describe("rollupFromBeads", () => {
     expect(r.epicsRemaining).toBe(1); // alpha-2 open
     expect(r.openBeadsRemaining).toBe(3); // alpha-2.1, alpha-2.2, alpha-3
     expect(r.hasBlocked).toBe(false);
+  });
+
+  it("should expose in-progress epics as features with child-derived activity inputs", () => {
+    const r = rollupFromBeads(beadsFor("alpha"));
+    // Only alpha-1 is in_progress (alpha-2 is an open backlog epic).
+    expect(r.features).toHaveLength(1);
+    const f = r.features[0]!;
+    expect(f.id).toBe("alpha-1");
+    expect(f.title).toBe("Active epic — auth revamp");
+    expect(f.completionPercent).toBe(67);
+    expect(f.closedChildren).toBe(2);
+    expect(f.totalChildren).toBe(3);
+    expect(f.status).toBe("in_progress");
+    // alpha-1.3 (oauth callback) is the one in-progress child, assigned to Toast.
+    expect(f.inProgressChildren).toBe(1);
+    expect(f.assignees).toContain("greenplace/Toast");
+    // Project-level in-progress bead count (non-epic): only alpha-1.3.
+    expect(r.inProgressBeadCount).toBe(1);
+  });
+
+  it("should yield no features and zero in-progress beads when no epic is active", () => {
+    const r = rollupFromBeads(beadsFor("delta"));
+    expect(r.features).toEqual([]);
+    expect(r.inProgressBeadCount).toBe(0);
   });
 
   it("should flag blocked and compute a partially-complete active epic", () => {
@@ -222,6 +321,99 @@ describe("CoordinationOverviewService.getOverviewProjects", () => {
     expect(totals.blocked).toBe(1);
     expect(totals.needsInput).toBe(1);
     expect(totals.portfolioCompletionPercent).toBe(39); // mean(67,50,0)
+  });
+
+  describe("features + activity (adj-209.1.2)", () => {
+    it("should build features[] with assignee-attributed agents + per-feature and per-project activityLevel", async () => {
+      const deps = makeDeps({
+        projects: [
+          project({ id: "alpha-id", name: "alpha", path: "/alpha" }),
+          project({ id: "delta-id", name: "delta", path: "/delta" }),
+        ],
+        scenarioByPath: { "/alpha": "alpha", "/delta": "delta" },
+        agents: [
+          agent("greenplace/Toast", "alpha", "working"), // assignee of alpha-1.3
+          agent("greenplace/Idle", "alpha", "idle"), // on project, not on the feature
+          agent("greenplace/Doc", "delta", "idle"),
+        ],
+        recentProgressCounts: { "greenplace/Toast": 4 },
+      });
+      const { projects } = await createCoordinationOverviewService(deps).getOverviewProjects();
+      const alpha = projects.find((p) => p.projectId === "alpha-id")!;
+      const delta = projects.find((p) => p.projectId === "delta-id")!;
+
+      // Uncapped agent count = ALL agents on the project.
+      expect(alpha.agentCount).toBe(2);
+
+      // Features = the project's in-progress epics.
+      expect(alpha.features).toHaveLength(1);
+      const f = alpha.features[0]!;
+      expect(f.id).toBe("alpha-1");
+      expect(f.completionPercent).toBe(67);
+      expect(f.status).toBe("in_progress");
+      // Only Toast is attributed to the feature (assignee of a child bead); Idle isn't.
+      expect(f.agents).toEqual([{ id: "greenplace/Toast", status: "working" }]);
+      expect(f.activityLevel).toBeGreaterThan(0);
+      expect(f.activityLevel).toBeLessThanOrEqual(1);
+
+      // Project-level activity is populated and the busy project is hotter than the quiet one.
+      expect(alpha.activityLevel).toBeGreaterThan(0);
+      expect(delta.features).toEqual([]);
+      expect(delta.activityLevel).toBe(0);
+      expect(alpha.activityLevel).toBeGreaterThan(delta.activityLevel);
+    });
+
+    it("should count engaged agents (working) but not idle in the project activity signal", async () => {
+      const base = (status: string) =>
+        makeDeps({
+          projects: [project({ id: "delta-id", name: "delta", path: "/delta" })],
+          scenarioByPath: { "/delta": "delta" }, // delta has no in-progress beads
+          agents: [agent("greenplace/Doc", "delta", status)],
+        });
+      const working = (
+        await createCoordinationOverviewService(base("working")).getOverviewProjects()
+      ).projects[0]!;
+      const idle = (
+        await createCoordinationOverviewService(base("idle")).getOverviewProjects()
+      ).projects[0]!;
+
+      expect(working.activityLevel).toBeGreaterThan(0);
+      expect(idle.activityLevel).toBe(0);
+      expect(working.activityLevel).toBeGreaterThan(idle.activityLevel);
+    });
+
+    it("should raise a feature's activity with recent report_progress cadence", async () => {
+      const build = (counts?: Record<string, number>) =>
+        makeDeps({
+          projects: [project({ id: "gamma-id", name: "gamma", path: "/gamma" })],
+          scenarioByPath: { "/gamma": "gamma" },
+          agents: [agent("greenplace/Nib", "gamma", "working")], // assignee of gamma-1.1
+          ...(counts ? { recentProgressCounts: counts } : {}),
+        });
+      const quiet = (
+        await createCoordinationOverviewService(build()).getOverviewProjects()
+      ).projects[0]!.features[0]!;
+      const chatty = (
+        await createCoordinationOverviewService(
+          build({ "greenplace/Nib": 8 })
+        ).getOverviewProjects()
+      ).projects[0]!.features[0]!;
+
+      expect(chatty.id).toBe("gamma-1");
+      expect(chatty.activityLevel).toBeGreaterThan(quiet.activityLevel);
+    });
+
+    it("should degrade to empty features + zero activity without throwing", async () => {
+      const deps = makeDeps({
+        projects: [project({ id: "alpha-id", name: "alpha", path: "/alpha" })],
+        scenarioByPath: { "/alpha": "alpha" },
+      });
+      deps.fetchProjectBeads = vi.fn(async () => fail("CLI_ERROR", "bd exploded"));
+      const p = (await createCoordinationOverviewService(deps).getOverviewProjects()).projects[0]!;
+      expect(p.degraded).toBe(true);
+      expect(p.features).toEqual([]);
+      expect(p.activityLevel).toBe(0);
+    });
   });
 
   describe("resilience", () => {
