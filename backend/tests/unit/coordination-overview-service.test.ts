@@ -1,13 +1,20 @@
 /**
  * Unit tests for the Mission Control coordination rollup service (adj-208.1.2).
  *
- * Rule 1 (real data shapes): the per-project bead/epic inputs are built from
- * REAL `bd list --json` output captured in `tests/fixtures/overview/bd-shapes.json`
- * and run through the SAME reused transforms the production service composes
- * (`transformBead`, `computeEpicProgressFromDeps`). Nothing is hand-crafted from
- * the TS `EpicProgress` / `BeadInfo` interfaces — the fixtures carry real CLI
- * fields (`owner`, `created_by`, `dependency_count`, `metadata`) that the TS
- * types do not even declare.
+ * Rule 1 (real data shapes): the per-project bead/epic inputs are built from REAL
+ * `bd` output captured in `tests/fixtures/overview/bd-shapes.json` and run through
+ * the SAME reused transforms the production service composes (`transformBead`,
+ * `computeEpicProgressFromDeps`). Nothing is hand-crafted from the TS
+ * `EpicProgress` / `BeadInfo` interfaces — the fixtures carry real CLI fields
+ * (`owner`, `created_by`, `dependency_count`, `dependency_type`) the TS types do
+ * not even declare.
+ *
+ * adj-208.1.2.1: epic `dependencies` use the REAL `bd show <epic> --json` shape
+ * (full child issue records with `dependency_type` + embedded `status`) — the
+ * shape production's `computeEpicProgress` actually feeds in. The earlier fixture
+ * fabricated `bd list` edge tuples ({issue_id, depends_on_id}), which is what let
+ * this test pass while production read completion=0 (it masked adj-208.1.4). With
+ * the real show shape, this test now genuinely fails against the pre-1.4 code.
  */
 import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -30,19 +37,26 @@ import { ok, fail } from "../../src/types/service-result.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// Fixture loading — REAL bd list shapes → domain objects via reused transforms
+// Fixture loading — REAL bd shapes → domain objects via reused transforms
 // ---------------------------------------------------------------------------
 
-interface RawDep {
-  issue_id: string;
-  depends_on_id: string;
-  type: string;
+/**
+ * A dependency as emitted by `bd show <epic> --json`: a full child issue record
+ * with an added `dependency_type` and its own embedded `status`. This is the
+ * shape production feeds `computeEpicProgressFromDeps` (via `computeEpicProgress`),
+ * NOT the `bd list` edge tuple {issue_id, depends_on_id, type}.
+ */
+interface RawShowDep {
+  id: string;
+  status: string;
+  dependency_type: string;
+  [k: string]: unknown;
 }
 interface RawIssue {
   id: string;
   status: string;
   issue_type: string;
-  dependencies?: RawDep[];
+  dependencies?: RawShowDep[];
   [k: string]: unknown;
 }
 interface RawScenario {
