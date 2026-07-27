@@ -63,6 +63,11 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
     /// cap). Falls back to `agents.count` when the backend omits the key.
     public let agentCount: Int
 
+    /// `true` when this project's rollup was served from stale/partial data (e.g. a
+    /// cold-dolt "degraded" read). The map surfaces a degraded indicator rather than
+    /// implying the (possibly empty) counts are authoritative. Defaults to `false`.
+    public let degraded: Bool
+
     /// `Identifiable` conformance keyed on the project UUID.
     public var id: String { projectId }
 
@@ -81,7 +86,8 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
         status: String,
         features: [FeatureRollup] = [],
         activityLevel: Double = 0,
-        agentCount: Int? = nil
+        agentCount: Int? = nil,
+        degraded: Bool = false
     ) {
         self.projectId = projectId
         self.name = name
@@ -94,11 +100,12 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
         self.activityLevel = activityLevel
         // Uncapped count; when unspecified, the assigned-agent list is the best proxy.
         self.agentCount = agentCount ?? agents.count
+        self.degraded = degraded
     }
 
     private enum CodingKeys: String, CodingKey {
         case projectId, name, activeEpic, epicsRemaining, openBeadsRemaining
-        case agents, status, features, activityLevel, agentCount
+        case agents, status, features, activityLevel, agentCount, degraded
     }
 
     /// Tolerant decode: the adj-209 fields (`features`, `activityLevel`, `agentCount`)
@@ -118,6 +125,7 @@ public struct ProjectStreamRollup: Codable, Equatable, Identifiable {
         features = try c.decodeIfPresent([FeatureRollup].self, forKey: .features) ?? []
         activityLevel = try c.decodeIfPresent(Double.self, forKey: .activityLevel) ?? 0
         agentCount = try c.decodeIfPresent(Int.self, forKey: .agentCount) ?? decodedAgents.count
+        degraded = try c.decodeIfPresent(Bool.self, forKey: .degraded) ?? false
     }
 }
 

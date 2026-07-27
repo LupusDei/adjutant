@@ -305,6 +305,26 @@ extension MissionControlModelTests {
         XCTAssertEqual(project.agentCount, 7, "agentCount is the uncapped active-agent count")
     }
 
+    // MARK: - degraded flag (adj-209 US1 — cold-dolt partial-data indicator)
+
+    func testDecodesDegradedFlag() throws {
+        let json = """
+        {
+          "projectId": "p", "name": "n", "activeEpic": null,
+          "epicsRemaining": 0, "openBeadsRemaining": 0, "agents": [],
+          "status": "on_track", "degraded": true
+        }
+        """.data(using: .utf8)!
+        let rollup = try JSONDecoder().decode(ProjectStreamRollup.self, from: json)
+        XCTAssertTrue(rollup.degraded, "degraded:true decodes to true")
+    }
+
+    func testMissingDegradedDefaultsFalse() throws {
+        // The original adj-208 sample has no `degraded` key.
+        let adjutant = try decodeSample().projects[0]
+        XCTAssertFalse(adjutant.degraded, "missing degraded defaults to false (authoritative data)")
+    }
+
     // MARK: - features[]
 
     func testDecodesFeaturesArray() throws {
