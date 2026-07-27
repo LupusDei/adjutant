@@ -18,14 +18,63 @@ import {
 import type { BeadInfo, EpicProgress } from "../services/beads/index.js";
 import { getAgents } from "../services/agents-service.js";
 import type { MessageStore } from "../services/message-store.js";
-import { success, internalError } from "../utils/responses.js";
+import type { CoordinationOverviewService } from "../services/coordination-overview-service.js";
+import { OverviewProjectsResponseSchema } from "../types/overview-projects.js";
+import { success, internalError, serviceUnavailable } from "../utils/responses.js";
 
 /**
  * Creates the overview router.
- * Requires the message store for unread counts/summaries.
+ *
+ * @param store - Message store for unread counts/summaries (root overview).
+ * @param coordinationService - Optional Mission Control rollup service backing
+ *   `GET /api/overview/projects` (adj-208). When omitted, that sub-route
+ *   responds 503; the root overview route is unaffected.
  */
-export function createOverviewRouter(store: MessageStore): Router {
+export function createOverviewRouter(
+  store: MessageStore,
+  coordinationService?: CoordinationOverviewService
+): Router {
   const router = Router();
+
+  /**
+   * GET /api/overview/projects
+   * Mission Control portfolio rollup (adj-208 US1): one entry per project with
+   * active epic + completion, remaining open epics/beads, agents, and a status
+   * beacon, plus portfolio totals — for the iOS coordination map.
+   *
+   * Thin adapter: delegate to the service, validate the payload against the
+   * response schema, and return the standard envelope. No business logic here.
+   */
+  router.get("/projects", async (_req, res) => {
+    if (!coordinationService) {
+      return res
+        .status(503)
+        .json(serviceUnavailable("Coordination overview is not available"));
+    }
+    try {
+      const rollup = await coordinationService.getOverviewProjects();
+      const parsed = OverviewProjectsResponseSchema.safeParse(rollup);
+      if (!parsed.success) {
+        return res
+          .status(500)
+          .json(
+            internalError(
+              "Overview rollup failed validation",
+              parsed.error.message
+            )
+          );
+      }
+      return res.json(success(parsed.data));
+    } catch (err) {
+      return res
+        .status(500)
+        .json(
+          internalError(
+            err instanceof Error ? err.message : "Failed to build overview rollup"
+          )
+        );
+    }
+  });
 
   /**
    * GET /api/overview
