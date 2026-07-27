@@ -6,7 +6,8 @@ import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
 import { startCacheCleanupScheduler } from "./services/audio-cache.js";
-import { startPrefixMapRefreshScheduler } from "./services/beads/index.js";
+import { startPrefixMapRefreshScheduler, getProjectOverview, computeEpicProgress } from "./services/beads/index.js";
+import { createCoordinationOverviewService } from "./services/coordination-overview-service.js";
 import { startUploadRetentionScheduler } from "./services/upload-retention.js";
 import { initWebSocketServer, setConversationStore, wsBroadcast } from "./services/ws-server.js";
 import { initAgentStatusStream } from "./services/agent-status-stream.js";
@@ -54,7 +55,7 @@ import { createPersonaService, initPersonaService } from "./services/persona-ser
 import { createCallsignToggleService } from "./services/callsign-toggle-service.js";
 import { initMessageDelivery } from "./services/message-delivery.js";
 import { initBeadAssignNotification } from "./services/bead-assign-notification.js";
-import { discoverLocalProjects, setAutoDevelopProductOwner, clearAutoDevelopProductOwner } from "./services/projects-service.js";
+import { discoverLocalProjects, setAutoDevelopProductOwner, clearAutoDevelopProductOwner, listProjects } from "./services/projects-service.js";
 import { spawnAdjutant } from "./services/adjutant-spawner.js";
 import { wireSpawnHealthChecks } from "./services/agent-spawner-service.js";
 import { initCostTracker } from "./services/cost-tracker.js";
@@ -187,6 +188,18 @@ const questionService = createQuestionService({
       // Session bridge not ready — agent will pull the answer from its DM.
     }
   },
+});
+
+// adj-208 — Mission Control portfolio rollup. Composes the EXISTING read paths
+// (projects, beads overview/epic-progress, agents, question store) so `GET
+// /api/overview/projects` adds no second bd access path.
+const coordinationOverviewService = createCoordinationOverviewService({
+  listProjects: () => listProjects(),
+  getProjectOverview: (projectPath) => getProjectOverview(projectPath),
+  computeEpicProgress: (projectPath) => computeEpicProgress(projectPath),
+  getAgents: () => getAgents(),
+  listOpenQuestions: (projectId) =>
+    questionStore.listQuestions({ projectId, status: "open" }),
 });
 
 // adj-202.3.5 / adj-202.7 — The Bridge: cost-guarded avatar session broker + read-only
@@ -363,7 +376,7 @@ app.use("/api/uploads", createUploadsRouter(uploadService));
 app.use("/api/conversations", createConversationsRouter(conversationStore, messageStore));
 app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
-app.use("/api/overview", createOverviewRouter(messageStore));
+app.use("/api/overview", createOverviewRouter(messageStore, coordinationOverviewService));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
 
 // adj-181.3 — agent question triage REST API (service constructed above the /avatar mount).
