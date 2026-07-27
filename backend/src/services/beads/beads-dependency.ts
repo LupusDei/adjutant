@@ -124,29 +124,74 @@ export function processEpicChildren(
 // ============================================================================
 
 /**
- * Computes progress for an epic given its dependency list and a status lookup map.
+ * A single dependency record as emitted by the `bd` CLI. `bd list` and `bd show`
+ * produce two DIFFERENT shapes for the same edge, so every field is optional and
+ * {@link computeEpicProgressFromDeps} detects the shape at runtime:
+ *   • `bd list` → `{ issue_id, depends_on_id, type }` (edge tuple)
+ *   • `bd show` → `{ id, dependency_type, status }` (the child issue itself)
+ */
+export interface EpicDependencyRecord {
+  /** bd list: the edge's source (the epic). */
+  issue_id?: string;
+  /** bd list: the edge's target (the child bead id). */
+  depends_on_id?: string;
+  /** bd list: edge type (e.g. "blocks"). */
+  type?: string;
+  /** bd show: the child bead's id. */
+  id?: string;
+  /** bd show: edge type on the embedded child. */
+  dependency_type?: string;
+  /** bd show: the child bead's own status (authoritative when present). */
+  status?: string;
+}
+
+/**
+ * Computes progress for an epic from its dependency records and a status lookup.
  *
- * Filters dependencies to those where `issue_id` matches the epic,
- * then counts how many of the dependent IDs have "closed" status in the map.
+ * Handles BOTH the `bd list` edge-tuple shape and the `bd show` embedded-child
+ * shape (adj-208.1.4) — see {@link EpicDependencyRecord}. For list tuples only
+ * edges whose `issue_id` matches the epic are counted; for show children each
+ * record is a child of the (epic-scoped) show and its embedded `status` is
+ * authoritative, falling back to `statusMap`.
  *
  * @param epic - The epic issue to compute progress for
- * @param deps - All dependency records (may include deps from other epics)
+ * @param deps - Dependency records in either CLI shape
  * @param statusMap - Map of bead ID to current status string
- * @returns EpicProgress object with computed completion percentage
+ * @returns EpicProgress object with computed completion percentage (0..1)
  */
 export function computeEpicProgressFromDeps(
   epic: BeadsIssue,
-  deps: { issue_id: string; depends_on_id: string; type: string }[],
+  deps: EpicDependencyRecord[],
   statusMap: Map<string, string>
 ): EpicProgress {
-  const childIds = deps
-    .filter((d) => d.issue_id === epic.id)
-    .map((d) => d.depends_on_id);
+  // adj-208.1.4: `bd list` and `bd show` emit two DIFFERENT dependency shapes.
+  // Normalize both into (childId, isClosed) so this function is correct no matter
+  // which command sourced `deps`:
+  //   • bd list  → { issue_id, depends_on_id, type }: an edge tuple. Only edges
+  //                FROM this epic count; the child is `depends_on_id`; closed
+  //                status comes from `statusMap`.
+  //   • bd show  → { id, dependency_type, status }: each record IS a child of the
+  //                shown epic (bd show is already epic-scoped); the child is `id`
+  //                and its own `status` is authoritative (statusMap is a fallback
+  //                for when the list --all pass didn't include it).
+  let total = 0;
+  let closedCount = 0;
 
-  const closedCount = childIds.filter(
-    (id) => statusMap.get(id) === "closed"
-  ).length;
-  const total = childIds.length;
+  for (const dep of deps) {
+    if (typeof dep.depends_on_id === "string") {
+      // bd list edge tuple — attribute only this epic's edges.
+      if (dep.issue_id !== epic.id) continue;
+      total += 1;
+      if (statusMap.get(dep.depends_on_id) === "closed") closedCount += 1;
+    } else if (typeof dep.id === "string") {
+      // bd show child object — already scoped to this epic.
+      total += 1;
+      const isClosed =
+        dep.status === "closed" || statusMap.get(dep.id) === "closed";
+      if (isClosed) closedCount += 1;
+    }
+  }
+
   const pct = total > 0 ? closedCount / total : 0;
 
   return {
