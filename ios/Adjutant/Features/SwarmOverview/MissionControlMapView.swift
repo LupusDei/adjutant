@@ -85,7 +85,7 @@ struct MissionControlCanvasView: View {
     var body: some View {
         // TimelineView drives the animated flow; thickness/brightness/glow are STATIC so a single
         // captured frame still shows the intensity difference (used by the PNG validator).
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+        TimelineView(AnimationTimelineSchedule(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
             let phase = CGFloat(timeline.date.timeIntervalSinceReferenceDate)
             mapCanvas(flowPhase: phase)
                 .frame(width: size.width, height: size.height)
