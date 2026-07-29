@@ -200,13 +200,14 @@ const PROGRESS_CADENCE_WINDOW_MS = 15 * 60_000; // 15 min
 const coordinationOverviewService = createCoordinationOverviewService({
   listProjects: () => listProjects(),
   fetchProjectBeads: (projectPath) =>
-    listAllProjectBeads(projectPath, { timeoutMs: 3000 }),
-  // adj-209.4.2.2: a large fleet's bd calls are serialized (bd mutex), so a cold
-  // ALL-projects rollup needs a generous hard deadline to compute + CACHE every
-  // project — otherwise most projects blow the deadline, degrade, and (not being
-  // cached) never warm. Per-project fits easily (largest project ~1.2s). The 30s
-  // cache then serves repeats instantly; the projectIds filter is the fast path.
-  perProjectTimeoutMs: 3000,
+    listAllProjectBeads(projectPath, { timeoutMs: 8000 }),
+  // adj-209.4.2.2: completion needs a project's FULL bead set, so a project with
+  // many beads / a cool dolt needs headroom to fetch + CACHE (a too-tight timeout
+  // degrades it AND the background refresh, so it never warms). 8s per project lets
+  // moderately-slow projects recover and cache; genuinely-cold ones still degrade
+  // gracefully. The generous hard deadline lets a cold ALL-projects request compute
+  // the whole fleet once; the 30s cache serves repeats fast; projectIds is the fast path.
+  perProjectTimeoutMs: 8000,
   hardTimeoutMs: 20000,
   getAgents: () => getAgents(),
   listOpenQuestions: (projectId) =>
