@@ -44,7 +44,12 @@ export async function listAllProjectBeads(
   try {
     const beadsDir = resolveBeadsDir(projectPath);
     const res = await execBd<BeadsIssue[]>(
-      ["list", "--all", "--json", "--limit", String(options.limit ?? 1000)],
+      // NOTE: the default MUST cover a project's ENTIRE bead set — this is the
+      // completion source. A too-small limit truncates the snapshot so an epic's
+      // CLOSED children fall outside it → statusMap can't see them → closedChildren
+      // reads 0 and every completion ring renders 0% (adjutant has ~2.8k beads,
+      // ~2.5k closed). Keep this comfortably above realistic project sizes.
+      ["list", "--all", "--json", "--limit", String(options.limit ?? 50000)],
       {
         cwd: projectPath,
         beadsDir,
