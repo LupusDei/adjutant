@@ -1,4 +1,6 @@
 /// <reference types="vitest" />
+import type { IncomingMessage, ServerResponse } from "node:http";
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -27,8 +29,50 @@ const suppressProxyError = (
   }
 };
 
+/**
+ * Redirect `localhost:<port>` to `127.0.0.1:<port>` (adj-e4rkt).
+ *
+ * Vite's HMR client derives its WebSocket host from the page's own URL, and
+ * gives up after `hmrTimeout` (30s) by doing a FULL PAGE RELOAD. On this machine
+ * native IPv6 loopback is blackholed, so a tab opened at `localhost:4200`
+ * loads fine (the browser falls back to IPv4 for plain HTTP) but its HMR socket
+ * lands on ::1 and never connects — so the page reloaded itself every ~30
+ * seconds, mid-typing, forever, and dragged request timeouts along with it.
+ *
+ * Telling people "use 127.0.0.1" is not a fix; one stale tab or bookmark brings
+ * it back. Redirecting makes the address bar — and therefore the HMR socket —
+ * IPv4 no matter how the server was reached.
+ *
+ * Scoped to the literal `localhost` host ONLY: tunnel/LAN hosts (ngrok, the iOS
+ * app) are untouched, so their HMR socket still targets the public origin.
+ */
+const redirectLocalhostToIPv4 = {
+  name: "adjutant:redirect-localhost-to-ipv4",
+  configureServer(server: {
+    middlewares: {
+      use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
+    };
+  }) {
+    server.middlewares.use((req, res, next) => {
+      const host = req.headers.host ?? "";
+      // Exact-match the hostname so "localhostings.dev" or a LAN host can't match.
+      const [hostname] = host.split(":");
+      if (hostname !== "localhost") {
+        next();
+        return;
+      }
+      res.writeHead(307, {
+        Location: `http://127.0.0.1:${FRONTEND_PORT}${req.url ?? "/"}`,
+        // Never let a browser or proxy cache this hop.
+        "Cache-Control": "no-store",
+      });
+      res.end();
+    });
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), redirectLocalhostToIPv4],
   server: {
     port: FRONTEND_PORT,
     // Bind IPv4 only. BROWSE TO http://127.0.0.1:4200 — `localhost:4200` is NOT
