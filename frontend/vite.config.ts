@@ -31,23 +31,24 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
-    // Listen dual-stack so plain `localhost:4200` works in every browser.
+    // Bind IPv4 only. BROWSE TO http://127.0.0.1:4200 — `localhost:4200` is NOT
+    // equivalent on this machine (adj-9tqx4).
     //
-    // Do NOT narrow this to one family. An IPv4-only listener leaves nothing on
-    // ::1, and Safari does not fall back to 127.0.0.1 the way Chrome does — it
-    // fails outright with "Safari Can't Connect to the Server" and every fetch
-    // then reports "due to access control checks".
+    // Native IPv6 loopback to this port is broken here, below the application:
+    // connections to [::1]:4200 stall to the client timeout (17/20 measured)
+    // while IPv4 on the SAME dual-stack socket is 0/20 slow and the dev server
+    // logs 200s for both. Verified it is not ours to fix — one correct `tcp46
+    // *.4200` listener, net.inet6.ip6.v6only=0, no second binder, macOS
+    // Application Firewall disabled, and the stalls persist with ngrok stopped.
+    // The SYNs are simply never answered. Tracked in adj-8u5vq.
     //
-    // The 30s stalls that made IPv6 look guilty were NOT the listener. Measured
-    // on a warm dual-stack server: [::1] is 20/20 fast for the page, 20/20 for
-    // proxied /api, and the /ws upgrade returns 101. The earlier "IPv6 hangs"
-    // reading was taken against a Vite that had just restarted and was still
-    // dependency-optimizing — a cold-start artifact, not an address-family one.
-    //
-    // What actually had to change is the proxy hop below: targets are explicit
-    // 127.0.0.1 literals (not "localhost"), so requests leaving this dev server
-    // never reach the backend over IPv6.
-    host: true,
+    // Given that, serving IPv6 is strictly worse than not serving it: a browser
+    // that picks ::1 hangs for 30s instead of failing over. Binding IPv4 removes
+    // that path, and addressing the server as a literal 127.0.0.1 removes the
+    // name resolution that would send a browser there in the first place —
+    // which matters because Safari, unlike Chrome, does not fall back to IPv4
+    // when ::1 fails. 0.0.0.0 rather than 127.0.0.1 keeps ngrok + LAN working.
+    host: "0.0.0.0",
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {

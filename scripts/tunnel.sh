@@ -113,4 +113,17 @@ fi
 
 echo ""
 echo "---"
-$NGROK_CMD http $NGROK_ARGS $PORT
+# Forward to 127.0.0.1:$PORT, NOT a bare "$PORT" (adj-9tqx4).
+#
+# Given a bare port, ngrok targets "localhost", resolves it to ::1 first, and
+# reconnects aggressively. Every dev-server restart orphaned those IPv6
+# connections, and they piled up in SYN_SENT (measured: 348 of them against
+# [::1]:4200) until the listener's IPv6 SYN backlog was saturated. Once full,
+# the kernel silently drops new SYNs on that path — so the BROWSER stalled to
+# its 30s timeout on ~40% of requests to localhost:4200 while the identical
+# request to 127.0.0.1:4200 answered in ~6ms and the dev server logged 200s.
+#
+# That is the whole "COMM ERROR: REQUEST TIMED OUT AFTER 30000MS" saga: not a
+# Vite bind bug, not a backend bug — the tunnel was exhausting the IPv6 backlog.
+# Pinning ngrok to IPv4 keeps it off that path entirely.
+$NGROK_CMD http $NGROK_ARGS 127.0.0.1:$PORT
