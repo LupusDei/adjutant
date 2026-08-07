@@ -49,6 +49,20 @@ const EVENT_TYPE_MAP: Partial<Record<EventName, string>> = {
 /** Heartbeat interval (15 seconds) */
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
+/**
+ * Drop a stream after this long with no socket activity at all (adj-bgpup).
+ * Node sets no socket timeout by default, so an abandoned SSE stream lived
+ * until the process restarted.
+ */
+const IDLE_SOCKET_TIMEOUT_MS = 120_000;
+
+/**
+ * If this many bytes stay queued for a client, it has stopped reading — the
+ * peer is gone but the socket is still nominally writable (the half-open case
+ * behind a tunnel, where heartbeat writes succeed into a void). Reap it.
+ */
+const MAX_BUFFERED_BYTES = 1_000_000;
+
 /** Track connected SSE clients for diagnostics */
 let sseClientCount = 0;
 
@@ -101,21 +115,59 @@ export function createEventsRouter(eventStore?: EventStore): Router {
 
     eventBus.onAny(handler);
 
-    // Heartbeat to keep connection alive through proxies
-    const heartbeat = setInterval(() => {
-      res.write(`: heartbeat ${new Date().toISOString()}\n\n`);
-    }, HEARTBEAT_INTERVAL_MS);
-
-    // Cleanup on disconnect
+    /**
+     * Cleanup on disconnect (adj-bgpup).
+     *
+     * Single-shot: 'close' and 'error' can both fire, and the old version
+     * decremented the client gauge twice and re-ran teardown. It also never
+     * ended the response, so a stream whose peer had vanished kept its
+     * EventBus subscription, its heartbeat timer, and its socket — one leaked
+     * connection per reconnect, which is what saturated the tunnel.
+     */
+    let closed = false;
     const cleanup = () => {
+      if (closed) return;
+      closed = true;
       eventBus.offAny(handler);
       clearInterval(heartbeat);
       sseClientCount--;
       logInfo("SSE client disconnected", { clientCount: sseClientCount });
+      try {
+        res.end();
+        req.socket.destroy();
+      } catch {
+        // Socket already gone.
+      }
     };
+
+    // Heartbeat to keep connection alive through proxies. A failed write means
+    // the peer is gone (half-open socket behind a tunnel) — reap immediately
+    // rather than writing into the void forever.
+    const heartbeat = setInterval(() => {
+      if (
+        closed ||
+        res.writableEnded ||
+        req.socket.destroyed ||
+        res.writableLength > MAX_BUFFERED_BYTES
+      ) {
+        cleanup();
+        return;
+      }
+      try {
+        res.write(`: heartbeat ${new Date().toISOString()}\n\n`);
+      } catch {
+        cleanup();
+      }
+    }, HEARTBEAT_INTERVAL_MS);
 
     req.on("close", cleanup);
     req.on("error", cleanup);
+    res.on("error", cleanup);
+    // Drop a stream that has gone completely silent — no heartbeat ack, no
+    // TCP activity. Node's default is no timeout, so these lived forever.
+    req.socket.setTimeout(IDLE_SOCKET_TIMEOUT_MS, () => {
+      cleanup();
+    });
   });
 
   // =========================================================================

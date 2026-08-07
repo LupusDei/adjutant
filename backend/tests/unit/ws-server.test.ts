@@ -13,6 +13,8 @@ class MockWs {
   private messageHandlers: ((raw: Buffer) => void)[] = [];
   private closeHandlers: (() => void)[] = [];
   private errorHandlers: ((err: Error) => void)[] = [];
+  private pongHandlers: (() => void)[] = [];
+  terminated = false;
   sentMessages: string[] = [];
   closed = false;
   closeCode?: number;
@@ -23,6 +25,12 @@ class MockWs {
     if (event === "message") this.messageHandlers.push(handler as (raw: Buffer) => void);
     if (event === "close") this.closeHandlers.push(handler as () => void);
     if (event === "error") this.errorHandlers.push(handler as (err: Error) => void);
+    if (event === "pong") this.pongHandlers.push(handler as () => void);
+  }
+
+  /** Simulate the client answering a ping (adj-bgpup liveness). */
+  _pong() {
+    for (const h of this.pongHandlers) h();
   }
 
   send(data: string) {
@@ -31,6 +39,12 @@ class MockWs {
 
   ping() {
     this.pings++;
+  }
+
+  terminate() {
+    this.terminated = true;
+    this.readyState = 3; // CLOSED
+    this._triggerClose();
   }
 
   close(code?: number, reason?: string) {
@@ -629,6 +643,10 @@ describe("ws-server", () => {
       vi.advanceTimersByTime(30_000);
 
       expect(ws.pings).toBeGreaterThanOrEqual(1);
+
+      // adj-bgpup: pings are now conditional on liveness — a client that
+      // answers keeps getting pinged; one that doesn't is reaped instead.
+      ws._pong();
 
       // Advance another 30 seconds — should trigger another ping
       vi.advanceTimersByTime(30_000);

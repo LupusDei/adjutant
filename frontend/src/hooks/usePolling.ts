@@ -100,13 +100,27 @@ export function usePolling<T>(
       void executeFetch();
     }
 
-    // Set up polling interval (fire-and-forget)
-    const intervalId = setInterval(() => void executeFetch(), interval);
+    // Set up polling interval (fire-and-forget).
+    // adj-bgpup: a hidden tab still burned a request every interval — and with
+    // several polling hooks per tab those requests queue behind the long-lived
+    // streams in the browser's per-origin connection pool, which is what
+    // pushed foreground fetches past their timeout. Hidden tabs skip the poll
+    // and catch up the moment they become visible again.
+    const intervalId = setInterval(() => {
+      if (document.hidden) return;
+      void executeFetch();
+    }, interval);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) void executeFetch();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Cleanup on unmount or when dependencies change
     return () => {
       mountedRef.current = false;
       clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [executeFetch, interval, immediate, enabled]);
 

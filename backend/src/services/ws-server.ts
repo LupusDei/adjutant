@@ -65,6 +65,9 @@ export interface WsServerMessage {
   type: "auth_challenge" | "connected" | "message" | "chat_message" | "stream_token" | "stream_end" | "typing" | "delivered" | "error" | "sync_response" | "pong"
     | "session_connected" | "session_disconnected" | "session_output" | "session_raw" | "session_status"
     | "timeline_event"
+    // adj-bgpup — agent status changes, so the dashboard needs only ONE
+    // long-lived stream per tab instead of also holding /api/agents/stream.
+    | "agent_status"
     // adj-181.3.5 — agent question triage real-time events
     | "question:new" | "question:answered" | "question:dismissed";
   id?: string | undefined;
@@ -146,7 +149,13 @@ interface WsClient {
   messageTimestamps: number[];
   /** Rate limiting: typing timestamps */
   typingTimestamps: number[];
-  pingTimer?: ReturnType<typeof setInterval>;
+  /**
+   * Liveness flag for the ping/pong sweep (adj-bgpup). Set true on every pong;
+   * cleared each sweep. A client still false at the next sweep answered no
+   * ping for a full interval — its socket is half-open (typical behind a
+   * tunnel, where the peer vanishes without a FIN) and is terminated.
+   */
+  isAlive: boolean;
   /** Session bridge output listener for cleanup on disconnect */
   outputHandler?: (sid: string, line: string, events: unknown[]) => void;
 }
@@ -178,6 +187,12 @@ let conversationStore: ConversationStore | null = null;
 const clients = new Map<string, WsClient>();
 const replayBuffer: ReplayEntry[] = [];
 let globalSeq = 0;
+/**
+ * Single server-wide liveness sweep (adj-bgpup). One timer for all clients
+ * rather than one per client: per-client timers could outlive their socket
+ * and kept pinging connections nobody was reading.
+ */
+let livenessTimer: ReturnType<typeof setInterval> | null = null;
 
 // ============================================================================
 // Helpers
@@ -185,6 +200,53 @@ let globalSeq = 0;
 
 function nextSeq(): number {
   return ++globalSeq;
+}
+
+/**
+ * Ping every client and reap the ones that didn't answer the previous ping
+ * (adj-bgpup).
+ *
+ * A browser tab that goes away cleanly sends a close frame, but a connection
+ * dropped behind a tunnel or a suspended laptop leaves the socket half-open:
+ * the server keeps a live `WebSocket` object, holds a slot at the tunnel edge
+ * and in the client map, and never hears about it. Pinging without checking
+ * for the pong (the old behaviour) detects nothing. This sweep does.
+ */
+function sweepLiveness(): void {
+  for (const [sessionId, client] of clients) {
+    if (!client.isAlive) {
+      logInfo("ws client reaped (no pong)", { sessionId });
+      clients.delete(sessionId);
+      try {
+        client.ws.terminate();
+      } catch {
+        // Socket already gone — nothing to terminate.
+      }
+      continue;
+    }
+    client.isAlive = false;
+    try {
+      if (client.ws.readyState === WebSocket.OPEN) client.ws.ping();
+    } catch {
+      // Write failed — the next sweep reaps it.
+    }
+  }
+  if (clients.size === 0) stopLivenessSweep();
+}
+
+/** Start the liveness sweep if it isn't already running. */
+function startLivenessSweep(): void {
+  if (livenessTimer) return;
+  livenessTimer = setInterval(sweepLiveness, PING_INTERVAL_MS);
+  // Never hold the process open just to ping clients.
+  livenessTimer.unref?.();
+}
+
+/** Stop the liveness sweep (no clients left, or server shutting down). */
+function stopLivenessSweep(): void {
+  if (!livenessTimer) return;
+  clearInterval(livenessTimer);
+  livenessTimer = null;
 }
 
 function send(client: WsClient, msg: WsServerMessage): void {
@@ -637,9 +699,11 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       lastSeqSeen: 0,
       messageTimestamps: [],
       typingTimestamps: [],
+      isAlive: true,
     };
 
     clients.set(sessionId, client);
+    startLivenessSweep();
 
     // Send auth challenge
     send(client, { type: "auth_challenge" });
@@ -652,12 +716,10 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       }
     }, AUTH_TIMEOUT_MS);
 
-    // Ping/pong keepalive
-    client.pingTimer = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.ping();
-      }
-    }, PING_INTERVAL_MS);
+    // Ping/pong keepalive: the shared sweep pings; this marks the answer.
+    ws.on("pong", () => {
+      client.isAlive = true;
+    });
 
     ws.on("message", (raw) => {
       let msg: WsClientMessage;
@@ -741,10 +803,18 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       }
     });
 
-    ws.on("close", () => {
+    // adj-bgpup: disconnect cleanup must run on BOTH close and error. A socket
+    // that errors (ECONNRESET behind a tunnel, abrupt peer loss) does not
+    // always emit 'close' promptly, and until it does the client stayed in the
+    // registry and kept its bridge listeners. Single-shot so the two paths
+    // can't double-clean.
+    let disconnected = false;
+    const handleDisconnect = (): void => {
+      if (disconnected) return;
+      disconnected = true;
       clearTimeout(authTimeout);
-      if (client.pingTimer) clearInterval(client.pingTimer);
       clients.delete(sessionId);
+      if (clients.size === 0) stopLivenessSweep();
       logInfo("ws client disconnected", { sessionId });
 
       // adj-zm2fh: was dynamic import; now static. Cleanup is sync.
@@ -762,10 +832,18 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       } catch (err) {
         logWarn("WS close cleanup failed", { error: String(err) });
       }
-    });
+    };
+
+    ws.on("close", handleDisconnect);
 
     ws.on("error", (err) => {
       logInfo("ws client error", { sessionId, error: err.message });
+      try {
+        ws.terminate();
+      } catch {
+        // Already destroyed.
+      }
+      handleDisconnect();
     });
   });
 
@@ -776,6 +854,14 @@ export function initWebSocketServer(_server: HttpServer, store?: MessageStore): 
       type: "typing",
       from: data.agent,
       state: data.status === "working" ? "thinking" : "stopped",
+    });
+    // adj-bgpup: the same event, in the shape the crew view needs, so a tab
+    // no longer opens a second WebSocket to /api/agents/stream just for this.
+    broadcast({
+      type: "agent_status",
+      from: data.agent,
+      status: data.status,
+      timestamp: new Date().toISOString(),
     });
   });
 
@@ -869,8 +955,8 @@ export function wsBroadcastToConversation(conversationId: string, msg: WsServerM
  */
 export function closeWsServer(): void {
   if (wss) {
+    stopLivenessSweep();
     for (const client of clients.values()) {
-      if (client.pingTimer) clearInterval(client.pingTimer);
       client.ws.close(1001, "Server shutting down");
     }
     clients.clear();

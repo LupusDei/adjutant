@@ -1,15 +1,22 @@
 /**
- * useSwarmAgents - Real-time agent monitoring with WebSocket + polling fallback.
+ * useSwarmAgents - Real-time agent monitoring over the shared communication
+ * stream, with a polling fallback.
  *
  * Combines:
  * 1. Initial fetch via api.agents.list()
- * 2. WebSocket subscription to /api/agents/stream for status_change events
- * 3. Optimistic status updates from WS events
- * 4. Periodic full refresh every 10s as fallback
- * 5. Exponential backoff reconnection on WS disconnect
+ * 2. Agent status changes pushed on the SHARED /ws/chat connection owned by
+ *    CommunicationContext (adj-bgpup — this hook no longer opens a second
+ *    long-lived socket of its own)
+ * 3. Optimistic status updates from those events
+ * 4. Periodic full refresh to catch roster joins/leaves, throttled while the
+ *    stream is connected and skipped entirely in a hidden tab
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../services/api';
+import {
+  useCommunicationActions,
+  useCommunicationStatus,
+} from '../contexts/CommunicationContext';
 import type { CrewMember, CrewMemberStatus } from '../types';
 
 // ============================================================================
@@ -23,7 +30,7 @@ export interface UseSwarmAgentsResult {
   loading: boolean;
   /** Error from latest fetch, or null */
   error: string | null;
-  /** Whether the WebSocket is connected */
+  /** Whether the shared status stream is connected */
   connected: boolean;
   /** Manually trigger a full refresh */
   refresh: () => void;
@@ -42,9 +49,12 @@ interface StatusChangeEvent {
 // ============================================================================
 
 const REFRESH_INTERVAL_MS = 10_000;
-const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_MAX_MS = 30_000;
-const RECONNECT_MULTIPLIER = 2;
+/**
+ * While the status stream is connected, do a full roster refetch only every
+ * Nth tick (adj-bgpup) — the stream already carries status changes, so the
+ * refetch exists purely to notice agents joining or leaving.
+ */
+const CONNECTED_REFRESH_FACTOR = 6;
 
 // ============================================================================
 // Hook
@@ -56,11 +66,10 @@ export function useSwarmAgents(): UseSwarmAgentsResult {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectDelay = useRef(RECONNECT_BASE_MS);
   const mountedRef = useRef(true);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Latest stream state, read by the refresh interval without re-arming it. */
+  const streamingRef = useRef(false);
 
   // ---- Fetch agents from API ----
   const fetchAgents = useCallback(async () => {
@@ -95,78 +104,37 @@ export function useSwarmAgents(): UseSwarmAgentsResult {
     });
   }, []);
 
-  // ---- WebSocket connection ----
-  const connectWs = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN ||
-        wsRef.current?.readyState === WebSocket.CONNECTING) {
-      return;
-    }
+  // ---- Agent status via the SHARED stream (adj-bgpup) ----
+  // This hook used to open its own WebSocket to /api/agents/stream. Because
+  // the crew view is mounted on every tab (just hidden), that meant every tab
+  // held TWO long-lived connections — doubling the tunnel/socket pressure that
+  // this bug is about. Status now rides the one connection the communication
+  // context already owns; the endpoint stays available for other clients.
+  const { subscribeAgentStatus } = useCommunicationActions();
+  const { connectionStatus } = useCommunicationStatus();
+  const streaming = connectionStatus === 'websocket';
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/agents/stream`;
+  useEffect(() => {
+    streamingRef.current = streaming;
+    setConnected(streaming);
+  }, [streaming]);
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      if (mountedRef.current) {
-        setConnected(true);
-      }
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data as string) as StatusChangeEvent;
-        // Successful message — reset backoff since connection is stable
-        reconnectDelay.current = RECONNECT_BASE_MS;
-        applyStatusChange(msg);
-      } catch {
-        // Ignore unparseable messages
-      }
-    };
-
-    ws.onerror = () => {
-      // onclose handles reconnection
-    };
-
-    ws.onclose = () => {
-      if (mountedRef.current) {
-        setConnected(false);
-        wsRef.current = null;
-
-        // Schedule reconnect with exponential backoff
-        reconnectTimer.current = setTimeout(() => {
-          reconnectTimer.current = null;
-          if (mountedRef.current) {
-            connectWs();
-          }
-        }, reconnectDelay.current);
-
-        reconnectDelay.current = Math.min(
-          reconnectDelay.current * RECONNECT_MULTIPLIER,
-          RECONNECT_MAX_MS,
-        );
-      }
-    };
-  }, [applyStatusChange]);
+  useEffect(() => {
+    return subscribeAgentStatus((event) => {
+      applyStatusChange({
+        type: 'status_change',
+        agent: event.agent,
+        to: event.status as CrewMemberStatus,
+        timestamp: event.timestamp,
+      });
+    });
+  }, [subscribeAgentStatus, applyStatusChange]);
 
   // ---- Cleanup ----
   const cleanup = useCallback(() => {
-    if (reconnectTimer.current) {
-      clearTimeout(reconnectTimer.current);
-      reconnectTimer.current = null;
-    }
     if (refreshTimer.current) {
       clearInterval(refreshTimer.current);
       refreshTimer.current = null;
-    }
-    if (wsRef.current) {
-      wsRef.current.onopen = null;
-      wsRef.current.onmessage = null;
-      wsRef.current.onerror = null;
-      wsRef.current.onclose = null;
-      wsRef.current.close();
-      wsRef.current = null;
     }
   }, []);
 
@@ -177,11 +145,15 @@ export function useSwarmAgents(): UseSwarmAgentsResult {
     // Initial fetch
     void fetchAgents();
 
-    // Connect WebSocket
-    connectWs();
-
-    // Periodic refresh as fallback
+    // Periodic refresh. adj-bgpup: a hidden tab never refreshes, and while the
+    // WS is delivering status changes the full refetch drops to
+    // CONNECTED_REFRESH_FACTOR× the interval — it is then only needed to pick
+    // up agents joining or leaving the roster, which the stream doesn't carry.
+    let tick = 0;
     refreshTimer.current = setInterval(() => {
+      tick++;
+      if (document.hidden) return;
+      if (streamingRef.current && tick % CONNECTED_REFRESH_FACTOR !== 0) return;
       void fetchAgents();
     }, REFRESH_INTERVAL_MS);
 
@@ -189,7 +161,7 @@ export function useSwarmAgents(): UseSwarmAgentsResult {
       mountedRef.current = false;
       cleanup();
     };
-  }, [fetchAgents, connectWs, cleanup]);
+  }, [fetchAgents, cleanup]);
 
   // ---- Manual refresh ----
   const refresh = useCallback(() => {

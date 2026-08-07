@@ -6,6 +6,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import type { ChatMessage } from '../types';
+import {
+  useCommunicationActions,
+  useCommunicationStatus,
+  type IncomingChatMessage,
+} from '../contexts/CommunicationContext';
 import { useMobileAudio } from './useMobileAudio';
 
 const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
@@ -43,7 +48,17 @@ export interface UseOverseerNotificationsReturn {
 }
 
 const STORAGE_KEY = 'overseer-notifications';
-const DEFAULT_POLL_INTERVAL = 15000;
+
+/**
+ * Fallback poll interval (adj-bgpup).
+ *
+ * This hook used to poll `/api/messages` every 15s in every tab, forever —
+ * ~54% of all tunnel traffic — while the same tab already held a WebSocket
+ * that pushes the very same messages. New messages now arrive via the push;
+ * this poll only runs when there is NO live stream (polling-only mode or a
+ * dropped connection), and never while the tab is hidden.
+ */
+const DEFAULT_POLL_INTERVAL = 60000;
 
 /**
  * Check if a message should trigger a voice notification.
@@ -163,7 +178,48 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
     setIsPlaying(false);
   }, [settings.volume, mobileAudio]);
 
-  // Poll for new messages
+  // ---------------------------------------------------------------------------
+  // Primary path: messages pushed over the live stream (adj-bgpup)
+  // ---------------------------------------------------------------------------
+  const { subscribe } = useCommunicationActions();
+  const { connectionStatus } = useCommunicationStatus();
+  /** True while a live stream is delivering messages; polling is then redundant. */
+  const isStreaming = connectionStatus === 'websocket' || connectionStatus === 'sse';
+
+  useEffect(() => {
+    if (!settings.enabled) return;
+
+    return subscribe((incoming: IncomingChatMessage) => {
+      // The push carries no `role`; anything not sent by the operator is an
+      // agent message, which is exactly what shouldReadAloud() selects.
+      if (incoming.from === 'user') return;
+      if (seenMessageIdsRef.current.has(incoming.id)) return;
+      seenMessageIdsRef.current.add(incoming.id);
+
+      // Only the fields the notification queue reads are meaningful here; the
+      // rest satisfy the ChatMessage shape for a synthetic push record.
+      notificationQueueRef.current.push({
+        id: incoming.id,
+        sessionId: null,
+        agentId: incoming.from,
+        recipient: incoming.to,
+        role: 'agent',
+        body: incoming.body,
+        metadata: null,
+        deliveryStatus: 'delivered',
+        eventType: null,
+        threadId: null,
+        conversationId: incoming.conversationId ?? null,
+        createdAt: incoming.timestamp,
+        updatedAt: incoming.timestamp,
+      });
+      void processQueue();
+    });
+  }, [settings.enabled, subscribe, processQueue]);
+
+  // ---------------------------------------------------------------------------
+  // Fallback path: poll only when no live stream is delivering messages
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!settings.enabled) return;
 
@@ -184,7 +240,13 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
           }
         }
 
-        seenMessageIdsRef.current = new Set(response.items.map((m) => m.id));
+        // Merge (don't replace) — ids recorded by the push path must survive,
+        // or a pushed message would be re-announced by the next poll.
+        if (seenMessageIdsRef.current.size > 1000) {
+          seenMessageIdsRef.current = new Set(response.items.map((m) => m.id));
+        } else {
+          for (const m of response.items) seenMessageIdsRef.current.add(m.id);
+        }
         isInitialFetchRef.current = false;
         setError(null);
       } catch (err) {
@@ -192,9 +254,22 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
       }
     };
 
+    // One fetch on mount seeds the seen-ids set so the first push isn't
+    // announced as a backlog, regardless of transport.
     void fetchAndNotify();
 
+    // With a live stream up, the push IS the notification source — do not
+    // poll on top of it (adj-bgpup).
+    if (isStreaming) {
+      return () => {
+        mobileAudio.stop();
+      };
+    }
+
     const intervalId = setInterval(() => {
+      // A hidden tab cannot play audio the operator is listening to, and its
+      // requests still occupy a tunnel/browser connection slot.
+      if (document.hidden) return;
       void fetchAndNotify();
     }, settings.pollInterval);
 
@@ -202,7 +277,7 @@ export function useOverseerNotifications(): UseOverseerNotificationsReturn {
       clearInterval(intervalId);
       mobileAudio.stop();
     };
-  }, [settings.enabled, settings.pollInterval, processQueue, mobileAudio]);
+  }, [settings.enabled, settings.pollInterval, isStreaming, processQueue, mobileAudio]);
 
   const setEnabled = useCallback((enabled: boolean) => {
     setSettings((prev) => ({ ...prev, enabled }));

@@ -1,53 +1,45 @@
+/**
+ * useSwarmAgents tests.
+ *
+ * adj-bgpup: this hook no longer owns a WebSocket. Agent status arrives on the
+ * SHARED connection held by CommunicationContext (one long-lived stream per
+ * tab instead of two), so the harness drives a mocked subscribeAgentStatus
+ * rather than a mock socket. Reconnection/backoff is the context's concern and
+ * is covered by its own tests.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useSwarmAgents } from '../../../src/hooks/useSwarmAgents';
 import type { CrewMember } from '../../../src/types';
 
 // =============================================================================
-// Mock WebSocket
+// Mock the shared communication stream
 // =============================================================================
 
-class MockWebSocket {
-  static CONNECTING = 0;
-  static OPEN = 1;
-  static CLOSING = 2;
-  static CLOSED = 3;
-
-  readyState = MockWebSocket.CONNECTING;
-  onopen: ((ev: Event) => void) | null = null;
-  onclose: ((ev: CloseEvent) => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: ((ev: Event) => void) | null = null;
-
-  sentMessages: string[] = [];
-
-  constructor(public url: string) {
-    // Auto-open after a tick
-    setTimeout(() => {
-      this.readyState = MockWebSocket.OPEN;
-      this.onopen?.(new Event('open'));
-    }, 0);
-  }
-
-  send(data: string): void {
-    this.sentMessages.push(data);
-  }
-
-  close(): void {
-    this.readyState = MockWebSocket.CLOSED;
-  }
-
-  simulateMessage(data: unknown): void {
-    this.onmessage?.(new MessageEvent('message', {
-      data: JSON.stringify(data),
-    }));
-  }
-
-  simulateClose(): void {
-    this.readyState = MockWebSocket.CLOSED;
-    this.onclose?.(new CloseEvent('close'));
-  }
+interface AgentStatusEvent {
+  agent: string;
+  status: string;
+  timestamp: string;
 }
+
+let statusHandlers: ((event: AgentStatusEvent) => void)[] = [];
+let connectionStatus = 'websocket';
+
+/** Push a status change down the shared stream, as the server would. */
+function pushStatus(event: AgentStatusEvent): void {
+  for (const h of statusHandlers) h(event);
+}
+
+vi.mock('../../../src/contexts/CommunicationContext', () => ({
+  useCommunicationActions: () => ({
+    subscribeAgentStatus: (cb: (event: AgentStatusEvent) => void) => {
+      statusHandlers.push(cb);
+      return () => {
+        statusHandlers = statusHandlers.filter((h) => h !== cb);
+      };
+    },
+  }),
+  useCommunicationStatus: () => ({ connectionStatus }),
+}));
 
 // =============================================================================
 // Mock api.agents.list
@@ -63,6 +55,8 @@ vi.mock('../../../src/services/api', () => ({
   },
 }));
 
+import { useSwarmAgents } from '../../../src/hooks/useSwarmAgents';
+
 // =============================================================================
 // Test helpers
 // =============================================================================
@@ -74,27 +68,19 @@ function makeAgent(overrides: Partial<CrewMember> = {}): CrewMember {
     type: 'agent',
     project: null,
     status: 'working',
-    unreadMail: 0,
     ...overrides,
-  };
+  } as CrewMember;
 }
 
 // =============================================================================
 // Setup
 // =============================================================================
 
-let mockWs: MockWebSocket | null = null;
-
 beforeEach(() => {
   vi.useFakeTimers();
-  mockWs = null;
-  vi.stubGlobal('WebSocket', class extends MockWebSocket {
-    constructor(url: string) {
-      super(url);
-      // eslint-disable-next-line @typescript-eslint/no-this-alias
-      mockWs = this;
-    }
-  });
+  statusHandlers = [];
+  connectionStatus = 'websocket';
+  mockAgentsList.mockReset();
   mockAgentsList.mockResolvedValue([]);
 });
 
@@ -102,7 +88,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllTimers();
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 // =============================================================================
@@ -117,11 +102,9 @@ describe('useSwarmAgents', () => {
 
       const { result } = renderHook(() => useSwarmAgents());
 
-      // Initially loading
       expect(result.current.loading).toBe(true);
       expect(result.current.agents).toEqual([]);
 
-      // Resolve fetch
       await act(async () => {
         await Promise.resolve();
       });
@@ -146,129 +129,98 @@ describe('useSwarmAgents', () => {
     });
   });
 
-  describe('WebSocket connection', () => {
-    it('should connect to WebSocket on mount', async () => {
-      mockAgentsList.mockResolvedValue([]);
+  describe('shared status stream (adj-bgpup)', () => {
+    it('should not open a WebSocket of its own', async () => {
+      const wsSpy = vi.fn();
+      vi.stubGlobal('WebSocket', wsSpy);
 
+      try {
+        renderHook(() => useSwarmAgents());
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        expect(wsSpy).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('should subscribe to agent status on the shared stream', async () => {
       renderHook(() => useSwarmAgents());
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-      // WS should be created
-      expect(mockWs).not.toBeNull();
-      expect(mockWs!.url).toContain('/api/agents/stream');
+      expect(statusHandlers).toHaveLength(1);
     });
 
-    it('should set connected=true when WebSocket opens', async () => {
-      mockAgentsList.mockResolvedValue([]);
-
-      const { result } = renderHook(() => useSwarmAgents());
-
-      // Let WS auto-open
+    it('should unsubscribe on unmount', async () => {
+      const { unmount } = renderHook(() => useSwarmAgents());
       await act(async () => {
-        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      expect(statusHandlers).toHaveLength(1);
+
+      unmount();
+      expect(statusHandlers).toHaveLength(0);
+    });
+
+    it('should report connected when the shared stream is up', async () => {
+      const { result } = renderHook(() => useSwarmAgents());
+      await act(async () => {
+        await Promise.resolve();
       });
 
       expect(result.current.connected).toBe(true);
     });
 
-    it('should set connected=false when WebSocket closes', async () => {
-      mockAgentsList.mockResolvedValue([]);
+    it('should report disconnected when the shared stream is down', async () => {
+      connectionStatus = 'polling';
 
       const { result } = renderHook(() => useSwarmAgents());
-
-      // Let WS open
       await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-      expect(result.current.connected).toBe(true);
-
-      // Simulate close
-      act(() => {
-        mockWs!.simulateClose();
+        await Promise.resolve();
       });
 
       expect(result.current.connected).toBe(false);
     });
-
-    it('should clean up WebSocket on unmount', async () => {
-      mockAgentsList.mockResolvedValue([]);
-
-      const { unmount } = renderHook(() => useSwarmAgents());
-
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-
-      const ws = mockWs!;
-      unmount();
-
-      expect(ws.readyState).toBe(MockWebSocket.CLOSED);
-    });
   });
 
   describe('optimistic status updates', () => {
-    it('should update agent status on status_change event', async () => {
-      const agents = [
+    it('should update agent status on a pushed status change', async () => {
+      mockAgentsList.mockResolvedValue([
         makeAgent({ id: 'a/1', name: 'alpha', status: 'working' }),
         makeAgent({ id: 'a/2', name: 'beta', status: 'idle' }),
-      ];
-      mockAgentsList.mockResolvedValue(agents);
+      ]);
 
       const { result } = renderHook(() => useSwarmAgents());
-
-      // Resolve initial fetch
       await act(async () => {
         await Promise.resolve();
       });
 
-      // Let WS open
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-
-      // Simulate status change event
       act(() => {
-        mockWs!.simulateMessage({
-          type: 'status_change',
-          agent: 'alpha',
-          to: 'idle',
-          timestamp: new Date().toISOString(),
-        });
+        pushStatus({ agent: 'alpha', status: 'idle', timestamp: '2026-08-07T00:00:00Z' });
       });
 
-      // Agent alpha should now be idle
-      const alpha = result.current.agents.find(a => a.name === 'alpha');
-      expect(alpha?.status).toBe('idle');
-
-      // Agent beta should be unchanged
-      const beta = result.current.agents.find(a => a.name === 'beta');
-      expect(beta?.status).toBe('idle');
+      expect(result.current.agents.find((a) => a.name === 'alpha')?.status).toBe('idle');
+      expect(result.current.agents.find((a) => a.name === 'beta')?.status).toBe('idle');
     });
 
-    it('should ignore status_change for unknown agents', async () => {
-      const agents = [makeAgent({ id: 'a/1', name: 'alpha', status: 'working' })];
-      mockAgentsList.mockResolvedValue(agents);
+    it('should ignore a status change for an unknown agent', async () => {
+      mockAgentsList.mockResolvedValue([
+        makeAgent({ id: 'a/1', name: 'alpha', status: 'working' }),
+      ]);
 
       const { result } = renderHook(() => useSwarmAgents());
-
       await act(async () => {
         await Promise.resolve();
       });
 
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-
-      // Send status change for an unknown agent
       act(() => {
-        mockWs!.simulateMessage({
-          type: 'status_change',
-          agent: 'ghost',
-          to: 'offline',
-          timestamp: new Date().toISOString(),
-        });
+        pushStatus({ agent: 'ghost', status: 'offline', timestamp: '2026-08-07T00:00:00Z' });
       });
 
-      // Agents should be unchanged
       expect(result.current.agents).toHaveLength(1);
       expect(result.current.agents[0]?.name).toBe('alpha');
       expect(result.current.agents[0]?.status).toBe('working');
@@ -276,150 +228,105 @@ describe('useSwarmAgents', () => {
   });
 
   describe('periodic refresh', () => {
-    it('should refetch agents every 10 seconds', async () => {
-      const initialAgents = [makeAgent({ id: 'a/1', name: 'alpha' })];
-      const updatedAgents = [
-        makeAgent({ id: 'a/1', name: 'alpha' }),
-        makeAgent({ id: 'a/2', name: 'beta' }),
-      ];
+    it('should refetch every 10 seconds while the status stream is down', async () => {
+      connectionStatus = 'polling';
+      mockAgentsList.mockResolvedValue([makeAgent({ id: 'a/1', name: 'alpha' })]);
 
-      mockAgentsList.mockResolvedValueOnce(initialAgents);
-
-      const { result } = renderHook(() => useSwarmAgents());
-
-      // Initial fetch
+      renderHook(() => useSwarmAgents());
       await act(async () => {
         await Promise.resolve();
       });
-      expect(result.current.agents).toHaveLength(1);
       expect(mockAgentsList).toHaveBeenCalledTimes(1);
 
-      // Set up next response
-      mockAgentsList.mockResolvedValueOnce(updatedAgents);
-
-      // Advance 10s for periodic refresh
       await act(async () => {
         vi.advanceTimersByTime(10000);
         await Promise.resolve();
       });
 
       expect(mockAgentsList).toHaveBeenCalledTimes(2);
-      expect(result.current.agents).toHaveLength(2);
-    });
-  });
-
-  describe('reconnection', () => {
-    it('should attempt reconnect with backoff after WS disconnect', async () => {
-      mockAgentsList.mockResolvedValue([]);
-
-      renderHook(() => useSwarmAgents());
-
-      // Let WS open
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-
-      const firstWs = mockWs!;
-
-      // Simulate disconnect
-      act(() => {
-        firstWs.simulateClose();
-      });
-
-      // Should reconnect after base delay (1s)
-      await act(async () => {
-        vi.advanceTimersByTime(1000);
-      });
-
-      // A new WS should be created
-      expect(mockWs).not.toBe(firstWs);
-      expect(mockWs!.url).toContain('/api/agents/stream');
     });
 
-    it('should use exponential backoff for reconnection', async () => {
-      mockAgentsList.mockResolvedValue([]);
+    it('should not refetch on every tick while the status stream is connected', async () => {
+      // With the stream up, status changes arrive by push. The full refetch
+      // only exists to notice roster joins/leaves, so it runs at 1/6 the rate
+      // instead of competing for a connection slot every 10s (adj-bgpup).
+      mockAgentsList.mockResolvedValue([makeAgent({ id: 'a/1', name: 'alpha' })]);
 
       renderHook(() => useSwarmAgents());
-
-      // Let WS open
       await act(async () => {
-        vi.advanceTimersByTime(1);
+        await Promise.resolve();
       });
-
-      // First disconnect
-      act(() => {
-        mockWs!.simulateClose();
-      });
-
-      // After 999ms, no reconnect yet
-      await act(async () => {
-        vi.advanceTimersByTime(999);
-      });
-      const wsAfter999 = mockWs;
-
-      // At 1000ms, should reconnect
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-      expect(mockWs).not.toBe(wsAfter999);
-
-      // Let it open then close again
-      await act(async () => {
-        vi.advanceTimersByTime(1);
-      });
-      const secondWs = mockWs;
-      act(() => {
-        mockWs!.simulateClose();
-      });
-
-      // Second disconnect: backoff should be 2000ms
-      await act(async () => {
-        vi.advanceTimersByTime(1999);
-      });
-      expect(mockWs).toBe(secondWs);
+      expect(mockAgentsList).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        vi.advanceTimersByTime(1);
+        vi.advanceTimersByTime(50000);
+        await Promise.resolve();
       });
-      expect(mockWs).not.toBe(secondWs);
+      expect(mockAgentsList).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+        await Promise.resolve();
+      });
+      expect(mockAgentsList).toHaveBeenCalledTimes(2);
+    });
+
+    it('should skip the refetch while the tab is hidden', async () => {
+      connectionStatus = 'polling';
+      mockAgentsList.mockResolvedValue([makeAgent({ id: 'a/1', name: 'alpha' })]);
+
+      renderHook(() => useSwarmAgents());
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mockAgentsList).toHaveBeenCalledTimes(1);
+
+      const hiddenSpy = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+      try {
+        await act(async () => {
+          vi.advanceTimersByTime(60000);
+          await Promise.resolve();
+        });
+        expect(mockAgentsList).toHaveBeenCalledTimes(1);
+      } finally {
+        hiddenSpy.mockRestore();
+      }
+    });
+
+    it('should stop the refresh timer on unmount', async () => {
+      connectionStatus = 'polling';
+      const { unmount } = renderHook(() => useSwarmAgents());
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(mockAgentsList).toHaveBeenCalledTimes(1);
+
+      unmount();
+
+      await act(async () => {
+        vi.advanceTimersByTime(60000);
+        await Promise.resolve();
+      });
+      expect(mockAgentsList).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('manual refresh', () => {
     it('should refetch agents when refresh() is called', async () => {
-      const initialAgents = [makeAgent({ id: 'a/1', name: 'alpha' })];
-      const refreshedAgents = [makeAgent({ id: 'a/1', name: 'alpha', status: 'idle' })];
-
-      mockAgentsList.mockResolvedValueOnce(initialAgents);
+      mockAgentsList.mockResolvedValue([makeAgent({ id: 'a/1', name: 'alpha' })]);
 
       const { result } = renderHook(() => useSwarmAgents());
-
       await act(async () => {
         await Promise.resolve();
       });
-      expect(result.current.agents[0]?.status).toBe('working');
-
-      mockAgentsList.mockResolvedValueOnce(refreshedAgents);
+      expect(mockAgentsList).toHaveBeenCalledTimes(1);
 
       await act(async () => {
         result.current.refresh();
         await Promise.resolve();
       });
 
-      expect(result.current.agents[0]?.status).toBe('idle');
       expect(mockAgentsList).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('WebSocket URL derivation', () => {
-    it('should derive WS URL from window.location', () => {
-      mockAgentsList.mockResolvedValue([]);
-      renderHook(() => useSwarmAgents());
-
-      expect(mockWs).not.toBeNull();
-      // jsdom defaults to http://localhost so ws://
-      expect(mockWs!.url).toMatch(/^ws:\/\//);
-      expect(mockWs!.url).toContain('/api/agents/stream');
     });
   });
 });

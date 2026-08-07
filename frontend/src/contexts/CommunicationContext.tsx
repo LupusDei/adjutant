@@ -39,6 +39,21 @@ export interface IncomingTimelineEvent {
   createdAt: string;
 }
 
+/**
+ * An agent status change delivered over the shared stream (adj-bgpup).
+ *
+ * Previously the crew view opened its own WebSocket to /api/agents/stream
+ * purely for these events, so every tab held two long-lived connections. They
+ * now ride the one connection this context already owns.
+ */
+export interface IncomingAgentStatus {
+  /** Agent name (as reported by the status event). */
+  agent: string;
+  /** The agent's new status. */
+  status: string;
+  timestamp: string;
+}
+
 /** Options for sending a chat message. */
 export interface SendMessageOptions {
   to?: string;
@@ -48,6 +63,7 @@ export interface SendMessageOptions {
 
 type MessageHandler = (msg: IncomingChatMessage) => void;
 type TimelineEventHandler = (event: IncomingTimelineEvent) => void;
+type AgentStatusHandler = (event: IncomingAgentStatus) => void;
 
 /** Shape of a parsed WebSocket server message. */
 interface WsServerMsg {
@@ -66,6 +82,8 @@ interface WsServerMsg {
   serverTime?: string;
   // sync_response carries an array of missed chat_messages
   missed?: WsServerMsg[];
+  // adj-bgpup — agent_status field (crew status on the shared stream)
+  status?: string;
   // Timeline event fields
   eventType?: string;
   agentId?: string;
@@ -89,6 +107,11 @@ export interface CommunicationActionsContextValue {
   subscribe: (callback: MessageHandler) => () => void;
   /** Subscribe to incoming timeline events. Returns an unsubscribe function. */
   subscribeTimeline: (callback: TimelineEventHandler) => () => void;
+  /**
+   * Subscribe to agent status changes on the SHARED connection (adj-bgpup).
+   * Returns an unsubscribe function.
+   */
+  subscribeAgentStatus: (callback: AgentStatusHandler) => () => void;
   /**
    * Join a conversation's room-scoped fan-out on the SHARED connection
    * (adj-83hau). Sends `{type:'subscribe',conversationId}` and remembers the
@@ -186,6 +209,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   const sseRef = useRef<EventSource | null>(null);
   const subscribersRef = useRef<Set<MessageHandler>>(new Set());
   const timelineSubscribersRef = useRef<Set<TimelineEventHandler>>(new Set());
+  const agentStatusSubscribersRef = useRef<Set<AgentStatusHandler>>(new Set());
   /**
    * Conversations this client wants room-scoped fan-out for (channels). Held in
    * a ref so it survives reconnects: on every `connected` frame we re-send a
@@ -217,6 +241,17 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     for (const cb of timelineSubscribersRef.current) {
       try { cb(event); } catch { /* ignore subscriber errors */ }
     }
+  }, []);
+
+  const notifyAgentStatus = useCallback((event: IncomingAgentStatus) => {
+    for (const cb of agentStatusSubscribersRef.current) {
+      try { cb(event); } catch { /* ignore subscriber errors */ }
+    }
+  }, []);
+
+  const subscribeAgentStatus = useCallback((callback: AgentStatusHandler) => {
+    agentStatusSubscribersRef.current.add(callback);
+    return () => { agentStatusSubscribersRef.current.delete(callback); };
   }, []);
 
   const subscribe = useCallback((callback: MessageHandler) => {
@@ -465,6 +500,16 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
             }
             break;
           }
+          case 'agent_status':
+            // adj-bgpup: crew status now rides the shared stream.
+            if (msg.from && msg.status) {
+              notifyAgentStatus({
+                agent: msg.from,
+                status: msg.status,
+                timestamp: msg.timestamp ?? new Date().toISOString(),
+              });
+            }
+            break;
           case 'timeline_event':
             if (msg.id && msg.eventType && msg.agentId && msg.action && msg.createdAt) {
               notifyTimeline({
@@ -536,7 +581,7 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
     }
 
     return teardown;
-  }, [priority, notify, notifyTimeline]);
+  }, [priority, notify, notifyTimeline, notifyAgentStatus]);
 
   // ---------------------------------------------------------------------------
   // Send message — WebSocket if open, otherwise HTTP fallback
@@ -587,8 +632,8 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
   // Context values — actions are stable; status is volatile
   // ---------------------------------------------------------------------------
   const actionsValue = useMemo<CommunicationActionsContextValue>(
-    () => ({ sendMessage, subscribe, subscribeTimeline, subscribeConversation, unsubscribeConversation }),
-    [sendMessage, subscribe, subscribeTimeline, subscribeConversation, unsubscribeConversation],
+    () => ({ sendMessage, subscribe, subscribeTimeline, subscribeAgentStatus, subscribeConversation, unsubscribeConversation }),
+    [sendMessage, subscribe, subscribeTimeline, subscribeAgentStatus, subscribeConversation, unsubscribeConversation],
   );
 
   const statusValue = useMemo<CommunicationStatusContextValue>(
