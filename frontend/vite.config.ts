@@ -25,6 +25,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
+    // Bind dual-stack (0.0.0.0 + ::), not just IPv6 loopback (adj-hwzcw).
+    // Without this, Node v24 + Vite binds [::1]:4200 ONLY. A browser hitting
+    // localhost:4200 resolves to 127.0.0.1 (IPv4), finds nothing listening,
+    // and hangs until the client's 30s timeout — the "COMM ERROR: REQUEST
+    // TIMED OUT AFTER 30000MS" on the AGENTS and CHAT views, with a perfectly
+    // healthy backend answering in ~6ms.
+    host: true,
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
