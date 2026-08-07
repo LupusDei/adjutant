@@ -24,11 +24,16 @@ if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localSto
     key: (index: number) => [...store.keys()][index] ?? null,
   };
   Object.defineProperty(globalThis, 'localStorage', { value: localStoragePolyfill, writable: true });
-  Object.defineProperty(window, 'localStorage', { value: localStoragePolyfill, writable: true });
+  // Guarded: this setup file also runs for tests pinned to the `node`
+  // environment (e.g. the vite.config checks), where `window` does not exist.
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', { value: localStoragePolyfill, writable: true });
+  }
 }
 
-// Polyfill matchMedia for jsdom
-window.matchMedia = (query: string) => ({
+// Polyfill matchMedia for jsdom (skipped under the `node` environment).
+if (typeof window !== 'undefined') {
+  window.matchMedia = (query: string) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -38,6 +43,7 @@ window.matchMedia = (query: string) => ({
     removeListener: () => undefined,
     dispatchEvent: () => false,
   });
+}
 
 // Global mocks for dashboard hooks
 // vi.mock('../src/hooks/useDashboardMail', () => ({

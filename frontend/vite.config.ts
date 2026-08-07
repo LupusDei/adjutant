@@ -7,6 +7,12 @@ import tailwindcss from "@tailwindcss/vite";
 const FRONTEND_PORT = parseInt(process.env["VITE_PORT"] ?? "4200", 10);
 const API_PORT = process.env["VITE_API_PORT"] ?? "4201";
 
+// Proxy to the backend over IPv4 explicitly, never the literal "localhost"
+// (adj-plck0). Node 24 resolves "localhost" with Happy Eyeballs and may pick
+// ::1, which lands on the intermittently-hanging IPv6 loopback path and stalls
+// the proxied request (and the /ws upgrade) until the client's 30s timeout.
+const API_TARGET = `http://127.0.0.1:${API_PORT}`;
+
 // Suppress noisy ECONNREFUSED proxy errors during startup (adj-084 Bug 1).
 // The frontend starts before the backend is ready; these errors are transient
 // and the browser retries automatically.
@@ -25,25 +31,35 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
-    // Bind dual-stack (0.0.0.0 + ::), not just IPv6 loopback (adj-hwzcw).
-    // Without this, Node v24 + Vite binds [::1]:4200 ONLY. A browser hitting
-    // localhost:4200 resolves to 127.0.0.1 (IPv4), finds nothing listening,
-    // and hangs until the client's 30s timeout — the "COMM ERROR: REQUEST
-    // TIMED OUT AFTER 30000MS" on the AGENTS and CHAT views, with a perfectly
-    // healthy backend answering in ~6ms.
-    host: true,
+    // Bind IPv4 only — deliberately NOT `true`/dual-stack (adj-plck0, refines adj-hwzcw).
+    //
+    // `localhost` on macOS resolves to BOTH ::1 and 127.0.0.1, and the client
+    // picks per-connection. Connections to this stack over ::1 hang ~30% of the
+    // time (measured: interleaved same-instant requests to the backend were
+    // 14/14 fast on IPv4 and 4/14 hung on ::1; a bare node server is clean on
+    // both, so it is our stack, not the OS).
+    //
+    // adj-hwzcw used `host: true`, which made Vite ACCEPT the ::1 connection and
+    // then stall — trading a fast ECONNREFUSED for a 30s hang. That is the
+    // "COMM ERROR: REQUEST TIMED OUT AFTER 30000MS" on AGENTS/CHAT, and the
+    // "WebSocket is closed before the connection is established" for /ws/chat.
+    //
+    // Binding IPv4-only restores fail-fast: a browser that tries ::1 is refused
+    // instantly and falls back to 127.0.0.1 on the spot. 0.0.0.0 (not 127.0.0.1)
+    // keeps LAN/tunnel access working.
+    host: "0.0.0.0",
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: `http://localhost:${API_PORT}`,
+        target: API_TARGET,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("error", suppressProxyError);
         },
       },
       "/ws": {
-        target: `http://localhost:${API_PORT}`,
+        target: API_TARGET,
         changeOrigin: true,
         ws: true,
         configure: (proxy) => {
@@ -54,7 +70,7 @@ export default defineConfig({
       // Proxy them so no-API-key share links work through the dev tunnel, matching
       // the single-origin production deploy where the backend serves both.
       "/p": {
-        target: `http://localhost:${API_PORT}`,
+        target: API_TARGET,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("error", suppressProxyError);
@@ -65,7 +81,7 @@ export default defineConfig({
       // which loads <tunnel>/avatar through the frontend origin, reaches the backend
       // instead of falling through to the SPA (which served the dashboard — adj-202 bug).
       "/avatar": {
-        target: `http://localhost:${API_PORT}`,
+        target: API_TARGET,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("error", suppressProxyError);

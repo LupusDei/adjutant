@@ -539,8 +539,20 @@ void startDoltSupervisorFromEnv()
     logWarn("Dolt supervisor start failed (non-fatal)", { error: String(err) });
   });
 
-const server = app.listen(PORT, () => {
-  logInfo("backend server listening", { port: PORT });
+// Bind IPv4 explicitly (adj-plck0). Without a host Node binds the dual-stack
+// wildcard, so the backend also answers on ::1 — and connections arriving over
+// ::1 stall ~30% of the time (interleaved same-instant probes: 14/14 fast on
+// 127.0.0.1, 4/14 hung on [::1]; a bare node server is clean on both). Every
+// caller reaches us over loopback (Vite's proxy, MCP agents, the tunnel), so
+// dropping the IPv6 listener costs nothing and converts a 30s hang into an
+// instant ECONNREFUSED that clients retry on IPv4 immediately.
+const BIND_HOST = process.env["ADJUTANT_BIND_HOST"] ?? "0.0.0.0";
+// listen(port, host, cb) requires a numeric port (the port-only overload
+// accepted the raw string), so normalize what PORT may hold from the env.
+const PORT_NUMBER = typeof PORT === "number" ? PORT : Number.parseInt(PORT, 10);
+
+const server = app.listen(PORT_NUMBER, BIND_HOST, () => {
+  logInfo("backend server listening", { port: PORT_NUMBER, host: BIND_HOST });
 
   // Start audio cache cleanup scheduler (T056)
   startCacheCleanupScheduler();
