@@ -201,14 +201,6 @@ const coordinationOverviewService = createCoordinationOverviewService({
   listProjects: () => listProjects(),
   fetchProjectBeads: (projectPath) =>
     listAllProjectBeads(projectPath, { timeoutMs: 8000 }),
-  // adj-209.4.2.2: completion needs a project's FULL bead set, so a project with
-  // many beads / a cool dolt needs headroom to fetch + CACHE (a too-tight timeout
-  // degrades it AND the background refresh, so it never warms). 8s per project lets
-  // moderately-slow projects recover and cache; genuinely-cold ones still degrade
-  // gracefully. The generous hard deadline lets a cold ALL-projects request compute
-  // the whole fleet once; the 30s cache serves repeats fast; projectIds is the fast path.
-  perProjectTimeoutMs: 8000,
-  hardTimeoutMs: 20000,
   getAgents: () => getAgents(),
   listOpenQuestions: (projectId) =>
     questionStore.listQuestions({ projectId, status: "open" }),
@@ -225,6 +217,17 @@ const coordinationOverviewService = createCoordinationOverviewService({
     }
     return counts;
   },
+}, {
+  // adj-209.4.2.2: completion needs a project's FULL bead set, so a project with
+  // many beads / a cool dolt needs headroom to fetch + CACHE (a too-tight timeout
+  // degrades it AND the background refresh, so it never warms). 8s per project lets
+  // moderately-slow projects recover and cache; genuinely-cold ones still degrade
+  // gracefully. The generous hard deadline lets a cold ALL-projects request compute
+  // the whole fleet once; the 30s cache serves repeats fast; projectIds is the fast path.
+  // These are CONFIG (second arg), not deps — passing them in the deps object
+  // typechecked as an excess property and was silently ignored at runtime.
+  perProjectTimeoutMs: 8000,
+  hardTimeoutMs: 20000,
 });
 
 // adj-202.3.5 / adj-202.7 — The Bridge: cost-guarded avatar session broker + read-only
