@@ -29,6 +29,7 @@ import viteConfig from "../../vite.config";
 interface ProxyEntry {
   target?: unknown;
   ws?: boolean;
+  agent?: unknown;
 }
 
 /** The resolved config object (defineConfig returns what it was given here). */
@@ -87,5 +88,28 @@ describe("vite proxy targets (adj-plck0)", () => {
     const ws = proxy["/ws"];
     expect(ws?.ws).toBe(true);
     expect(String(ws?.target)).toMatch(/^http:\/\/127\.0\.0\.1:\d+/);
+  });
+});
+
+describe("proxy connection reuse (adj-xbu7s)", () => {
+  const proxy = (viteConfig as unknown as {
+    server?: { proxy?: Record<string, ProxyEntry> };
+  }).server?.proxy ?? {};
+
+  it.each(["/api", "/p", "/avatar"])(
+    "should give %s a keep-alive agent so proxied requests reuse sockets",
+    (path) => {
+      // Without an agent, http-proxy opens a NEW TCP connection per request and
+      // the backend closes it -> one TIME_WAIT (30s) per request. Under
+      // dashboard polling that reached ~35k TIME_WAIT sockets machine-wide,
+      // exhausting loopback ephemeral ports: new connections to ANY local port
+      // randomly hung, which is what "the frontend won't load" actually was.
+      expect(proxy[path]?.agent).toBeDefined();
+    },
+  );
+
+  it("should share ONE agent across routes, not one pool per route", () => {
+    expect(proxy["/api"]?.agent).toBe(proxy["/p"]?.agent);
+    expect(proxy["/api"]?.agent).toBe(proxy["/avatar"]?.agent);
   });
 });

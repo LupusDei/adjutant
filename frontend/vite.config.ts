@@ -1,4 +1,6 @@
 /// <reference types="vitest" />
+import { Agent } from "node:http";
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -12,6 +14,22 @@ const API_PORT = process.env["VITE_API_PORT"] ?? "4201";
 // ::1, which lands on the intermittently-hanging IPv6 loopback path and stalls
 // the proxied request (and the /ws upgrade) until the client's 30s timeout.
 const API_TARGET = `http://127.0.0.1:${API_PORT}`;
+
+// Reuse proxy connections to the backend (adj-xbu7s root cause).
+//
+// http-proxy's default agent opens a BRAND-NEW TCP connection for every proxied
+// request and the backend closes it after the response, leaving a TIME_WAIT
+// entry that lingers for 2*MSL (30s on macOS). Under dashboard polling load
+// that reached ~10,000 TIME_WAIT sockets on the backend port and ~35,000
+// machine-wide — enough to exhaust the loopback ephemeral-port space, at which
+// point NEW connections to ANY local port (Vite, the backend, static files,
+// ngrok's upstream) randomly blackholed. That was the all-day "intermittent
+// 30s timeout / frontend won't load" — a machine-level connection flood, not
+// any single route.
+//
+// A keep-alive agent holds a small pool of persistent connections instead:
+// thousands of proxied requests reuse ~a dozen sockets and the churn stops.
+const keepAliveAgent = new Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 30_000 });
 
 // Suppress noisy ECONNREFUSED proxy errors during startup (adj-084 Bug 1).
 // The frontend starts before the backend is ready; these errors are transient
@@ -53,6 +71,7 @@ export default defineConfig({
       "/api": {
         target: API_TARGET,
         changeOrigin: true,
+        agent: keepAliveAgent,
         configure: (proxy) => {
           proxy.on("error", suppressProxyError);
         },
@@ -71,6 +90,7 @@ export default defineConfig({
       "/p": {
         target: API_TARGET,
         changeOrigin: true,
+        agent: keepAliveAgent,
         configure: (proxy) => {
           proxy.on("error", suppressProxyError);
         },
@@ -82,6 +102,7 @@ export default defineConfig({
       "/avatar": {
         target: API_TARGET,
         changeOrigin: true,
+        agent: keepAliveAgent,
         configure: (proxy) => {
           proxy.on("error", suppressProxyError);
         },
