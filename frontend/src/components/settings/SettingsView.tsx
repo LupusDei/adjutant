@@ -452,11 +452,12 @@ export function SettingsView({ theme, setTheme, isActive }: SettingsViewProps) {
                   style={{ ...styles.copyButton, marginLeft: 'auto' }}
                   onClick={handleClearApiKey}
                 >
-                  CLEAR
+                  SIGN OUT
                 </button>
               </div>
               <p style={styles.hint}>
-                API key is stored in session. It will be sent with all API requests.
+                API key is stored on this device and shared by every window. It will be
+                sent with all API requests. SIGN OUT clears it everywhere.
               </p>
             </>
           )}

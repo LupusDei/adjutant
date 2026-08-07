@@ -3,6 +3,10 @@
  * Separated from the main api.ts to keep cost concerns modular.
  */
 
+// Auth header source — shared with api.ts so the storage key and storage
+// medium can never drift between the two clients (adj-0da4g).
+import { getApiKey } from './api-key';
+
 // Reuse the same base fetch infrastructure
 const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
 
@@ -110,10 +114,6 @@ export interface ReconciliationResult {
   status: 'verified' | 'discrepancy';
 }
 
-// Re-export the getApiKey function for auth headers
-function getApiKey(): string | null {
-  return sessionStorage.getItem('adjutant-api-key');
-}
 
 /**
  * Internal fetch wrapper for cost endpoints.

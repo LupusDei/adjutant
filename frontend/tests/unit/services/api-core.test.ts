@@ -8,6 +8,9 @@ const originalFetch = globalThis.fetch;
 beforeEach(() => {
   globalThis.fetch = mockFetch;
   mockFetch.mockReset();
+  // The API key lives in localStorage (adj-0da4g); clear both so a legacy
+  // session key can't leak between tests.
+  localStorage.clear();
   sessionStorage.clear();
 });
 
@@ -35,7 +38,7 @@ function mockErrorResponse(code: string, message: string, status = 400) {
 }
 
 describe('hasApiKey', () => {
-  it('should return true when API key is set in session storage', () => {
+  it('should return true when API key is set in local storage', () => {
     setApiKey('test-key-123');
     expect(hasApiKey()).toBe(true);
   });
@@ -51,7 +54,7 @@ describe('hasApiKey', () => {
   });
 
   it('should return false for empty string API key', () => {
-    sessionStorage.setItem('adjutant-api-key', '');
+    localStorage.setItem('adjutant-api-key', '');
     expect(hasApiKey()).toBe(false);
   });
 });

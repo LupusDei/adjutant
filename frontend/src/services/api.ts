@@ -59,32 +59,23 @@ import type {
 // Set VITE_API_URL only when you need to hit a different backend (e.g., production)
 const API_BASE_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? '/api';
 const DEFAULT_TIMEOUT = 30000;
-const API_KEY_STORAGE_KEY = 'adjutant-api-key';
 
 // =============================================================================
 // API Key Management
 // =============================================================================
 
-/**
- * Get the stored API key from session storage.
- */
-export function getApiKey(): string | null {
-  return sessionStorage.getItem(API_KEY_STORAGE_KEY);
-}
+// Storage lives in ./api-key so api.ts and api-costs.ts can never disagree
+// about where the key is kept (adj-0da4g). Re-exported here because most
+// consumers import it from the api barrel.
+import { getApiKey } from './api-key';
 
-/**
- * Set the API key in session storage.
- */
-export function setApiKey(key: string): void {
-  sessionStorage.setItem(API_KEY_STORAGE_KEY, key);
-}
-
-/**
- * Clear the API key from session storage.
- */
-export function clearApiKey(): void {
-  sessionStorage.removeItem(API_KEY_STORAGE_KEY);
-}
+export {
+  API_KEY_STORAGE_KEY,
+  getApiKey,
+  setApiKey,
+  clearApiKey,
+  hasApiKey,
+} from './api-key';
 
 /**
  * Build the no-API-key public URL for a published proposal from its share token.
@@ -100,14 +91,6 @@ export function publicProposalUrl(shareToken: string): string {
       ? window.location.origin
       : API_BASE_URL.replace(/\/api\/?$/, '');
   return `${origin}/p/${shareToken}`;
-}
-
-/**
- * Check if an API key is configured.
- */
-export function hasApiKey(): boolean {
-  const key = getApiKey();
-  return key !== null && key.length > 0;
 }
 
 // =============================================================================
