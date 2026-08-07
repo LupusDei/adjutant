@@ -347,15 +347,22 @@ async function runListAgents(
   const agentsResult = await getAgents();
   let agents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
 
-  // Cross-project read: when a projectId is named, scope to that project's crew.
-  // getAgents() sets CrewMember.project to the project NAME (resolveProjectName),
-  // NOT the UUID — so we must resolve the named projectId to its registry name
-  // before comparing (adj-202.3.2.1). Comparing the UUID directly returns zero
-  // agents and silently breaks cross-project reads.
-  if (projectId) {
-    const projectResult = getProject(projectId);
+  // FLEET-WIDE by default — "who is the crew / roster?" must return the WHOLE fleet,
+  // exactly like the Overview page's agent list (getAgents(), unscoped). Only scope
+  // to a project when the Commander EXPLICITLY names one via `args.project`.
+  //
+  // BUGFIX (roster empty): the Bridge RPC handler auto-injects the session's default
+  // projectId into EVERY tool call, so scoping list_agents on that injected id
+  // silently emptied the roster whenever the session's project had no matching crew
+  // (the avatar reported "no agents"). list_agents is a fleet-wide tool — the session
+  // default must NOT scope it; only an explicit spoken project name may.
+  // getAgents() sets CrewMember.project to the project NAME (resolveProjectName), not
+  // the UUID, so resolve the spoken name to its registry name before comparing.
+  const spokenProject = typeof args["project"] === "string" ? args["project"].trim() : "";
+  if (spokenProject) {
+    const projectResult = getProject(spokenProject);
     if (!projectResult.success || !projectResult.data) {
-      return reject(TOOL_LIST_AGENTS, projectId, "PROJECT_NOT_FOUND", `Project '${projectId}' not found.`);
+      return reject(TOOL_LIST_AGENTS, projectId, "PROJECT_NOT_FOUND", `Project '${spokenProject}' not found.`);
     }
     const projectName = projectResult.data.name;
     agents = agents.filter((a) => a.project === projectName);

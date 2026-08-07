@@ -232,11 +232,11 @@ describe("list_agents", () => {
     }
   });
 
-  it("filters agents by projectId by resolving the UUID to the project NAME (cross-project read)", async () => {
-    // Agents carry the project NAME; the caller names the project by UUID.
-    // getProject(PROJECT_ID) resolves to { name: "adjutant" } (beforeEach default),
-    // so the filter must match Raynor (project: "adjutant") and exclude Kerrigan.
-    // This FAILS against the old `a.project === projectId` (UUID) comparison.
+  it("stays FLEET-WIDE when the session projectId is injected — does NOT scope the roster (bug: avatar saw 0 agents)", async () => {
+    // REGRESSION (adj-210): the Bridge RPC handler auto-injects the session's default
+    // projectId into EVERY tool call. list_agents is a FLEET-WIDE tool (like the Overview
+    // page's agent list), so an injected projectId must NOT scope it — otherwise the whole
+    // roster vanishes whenever the session's project has no matching crew.
     mockGetAgents.mockResolvedValue({
       success: true,
       data: [
@@ -248,7 +248,31 @@ describe("list_agents", () => {
     const bridge = createBridgeToolBridge(makeDeps());
     const res = await bridge.executeTool({ tool: "list_agents", projectId: PROJECT_ID });
 
-    expect(mockGetProject).toHaveBeenCalledWith(PROJECT_ID);
+    expect(mockGetAgents).toHaveBeenCalled();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { agents: { id: string }[]; count: number };
+      // BOTH agents — the injected session project did NOT scope the fleet roster.
+      expect(data.count).toBe(2);
+    }
+  });
+
+  it("filters ONLY when a project is EXPLICITLY named (args.project), resolving name → crew", async () => {
+    // getAgents() sets CrewMember.project to the project NAME; getProject resolves a NAME
+    // (or UUID) to the registry record, so the filter matches Raynor and excludes Kerrigan.
+    mockGetProject.mockReturnValue({ success: true, data: { id: PROJECT_ID, name: "adjutant", path: "/tmp/adjutant" } });
+    mockGetAgents.mockResolvedValue({
+      success: true,
+      data: [
+        { id: "adjutant/Raynor", name: "Raynor", type: "engineer", project: "adjutant", status: "working" },
+        { id: "other/Kerrigan", name: "Kerrigan", type: "engineer", project: "other", status: "idle" },
+      ],
+    });
+
+    const bridge = createBridgeToolBridge(makeDeps());
+    const res = await bridge.executeTool({ tool: "list_agents", projectId: PROJECT_ID, args: { project: "adjutant" } });
+
+    expect(mockGetProject).toHaveBeenCalledWith("adjutant");
     expect(res.ok).toBe(true);
     if (res.ok) {
       const data = res.data as { agents: { id: string }[]; count: number };
@@ -257,7 +281,7 @@ describe("list_agents", () => {
     }
   });
 
-  it("returns PROJECT_NOT_FOUND when list_agents is scoped to an unknown projectId", async () => {
+  it("returns PROJECT_NOT_FOUND when an EXPLICITLY named project is unknown", async () => {
     mockGetProject.mockReturnValue({ success: false, error: { code: "NOT_FOUND", message: "nope" } });
     mockGetAgents.mockResolvedValue({
       success: true,
@@ -265,7 +289,7 @@ describe("list_agents", () => {
     });
 
     const bridge = createBridgeToolBridge(makeDeps());
-    const res = await bridge.executeTool({ tool: "list_agents", projectId: "ghost" });
+    const res = await bridge.executeTool({ tool: "list_agents", args: { project: "ghost" } });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("PROJECT_NOT_FOUND");
   });
