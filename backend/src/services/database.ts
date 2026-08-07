@@ -34,7 +34,7 @@ export function createDatabase(dbPath: string): Database.Database {
  * Run all unapplied migrations from the migrations directory.
  * Tracks applied migrations in a `migrations` table.
  */
-export function runMigrations(db: Database.Database): void {
+export function runMigrations(db: Database.Database, migrationsDir: string = MIGRATIONS_DIR): void {
   // Create the migrations tracking table
   db.exec(`
     CREATE TABLE IF NOT EXISTS migrations (
@@ -49,15 +49,32 @@ export function runMigrations(db: Database.Database): void {
     (db.prepare("SELECT name FROM migrations").all() as { name: string }[]).map((r) => r.name),
   );
 
-  // Read migration files in sorted order
+  // Read migration files in sorted order.
+  //
+  // adj-sh3pg: this used to log a WARN and RETURN. Because `tsc` never copied
+  // *.sql into dist/, production hit that path on every boot and applied ZERO
+  // migrations — a fresh DB served an empty schema and the first query threw
+  // "no such table: messages". A missing or empty migrations directory always
+  // means a broken build, so fail loudly at startup instead.
   let files: string[];
   try {
-    files = readdirSync(MIGRATIONS_DIR)
+    files = readdirSync(migrationsDir)
       .filter((f) => f.endsWith(".sql"))
       .sort();
-  } catch {
-    logWarn("No migrations directory found, skipping migrations");
-    return;
+  } catch (err) {
+    throw new Error(
+      `Migrations directory not found: ${migrationsDir}. ` +
+        `The build must copy src/**/*.sql into dist/ (npm run build runs scripts/copy-assets.mjs). ` +
+        `Refusing to start with an unmigrated database. Cause: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  if (files.length === 0) {
+    throw new Error(
+      `No migration files found in ${migrationsDir}. ` +
+        `A copy step that runs but copies nothing is still a broken build. ` +
+        `Refusing to start with an unmigrated database.`,
+    );
   }
 
   const insertMigration = db.prepare("INSERT INTO migrations (name) VALUES (?)");
@@ -67,7 +84,7 @@ export function runMigrations(db: Database.Database): void {
       continue;
     }
 
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf-8");
+    const sql = readFileSync(join(migrationsDir, file), "utf-8");
     logInfo(`Running migration: ${file}`);
 
     db.transaction(() => {
