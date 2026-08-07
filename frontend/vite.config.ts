@@ -31,23 +31,20 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
-    // Bind IPv4 only — deliberately NOT `true`/dual-stack (adj-plck0, refines adj-hwzcw).
+    // Listen dual-stack, so `localhost` works whichever family the browser
+    // picks (adj-9tqx4, refining adj-plck0).
     //
-    // `localhost` on macOS resolves to BOTH ::1 and 127.0.0.1, and the client
-    // picks per-connection. Connections to this stack over ::1 hang ~30% of the
-    // time (measured: interleaved same-instant requests to the backend were
-    // 14/14 fast on IPv4 and 4/14 hung on ::1; a bare node server is clean on
-    // both, so it is our stack, not the OS).
+    // Safari does NOT fall back to 127.0.0.1 when ::1 is refused the way Chrome
+    // does — it just reports "Safari Can't Connect to the Server". So an
+    // IPv4-only listener here is not a safe way to dodge IPv6.
     //
-    // adj-hwzcw used `host: true`, which made Vite ACCEPT the ::1 connection and
-    // then stall — trading a fast ECONNREFUSED for a 30s hang. That is the
-    // "COMM ERROR: REQUEST TIMED OUT AFTER 30000MS" on AGENTS/CHAT, and the
-    // "WebSocket is closed before the connection is established" for /ws/chat.
-    //
-    // Binding IPv4-only restores fail-fast: a browser that tries ::1 is refused
-    // instantly and falls back to 127.0.0.1 on the spot. 0.0.0.0 (not 127.0.0.1)
-    // keeps LAN/tunnel access working.
-    host: "0.0.0.0",
+    // Dropping IPv6 was never what fixed the 30s hangs anyway. A dual-stack bind
+    // is clean over ::1 (control server: 12/12 fast); the stall was the BACKEND's
+    // IPv6 accept path, reached through this dev server's proxy hop. That is
+    // fixed where it actually lives: the backend binds IPv4-only and every proxy
+    // target below is an explicit 127.0.0.1 literal, so no request from here can
+    // land on IPv6 no matter which family the browser used to reach us.
+    host: true,
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
