@@ -40,17 +40,20 @@ const config = viteConfig as unknown as {
 };
 
 describe("vite dev server binding (adj-9tqx4)", () => {
-  it("should bind IPv4 only — IPv6 loopback to this port stalls", () => {
-    // Measured on this stack: [::1]:4200 hangs to the 30s timeout while
-    // 127.0.0.1:4200 answers in ~6ms. Serving IPv6 here (host: true) means
-    // Safari connects over ::1 and hangs. Address the server as 127.0.0.1.
-    expect(config.server?.host).toBe("0.0.0.0");
+  it("should listen dual-stack so plain localhost works in every browser", () => {
+    // Safari does not fall back to 127.0.0.1 when nothing answers on ::1 — an
+    // IPv4-only listener makes localhost:4200 fail outright there.
+    expect(config.server?.host).toBe(true);
   });
 
-  it("should not narrow to loopback-only, so ngrok and LAN still reach it", () => {
+  it("should not narrow the bind to a single family", () => {
     const host = config.server?.host;
+
+    // Each of these drops a family (or restricts to loopback, breaking
+    // ngrok/LAN). Warm dual-stack measures clean on BOTH families, so there is
+    // no reason to narrow it.
+    expect(host).not.toBe("0.0.0.0");
     expect(host).not.toBe("127.0.0.1");
-    expect(host).not.toBe(true);
     expect(host).not.toBe("::1");
   });
 });

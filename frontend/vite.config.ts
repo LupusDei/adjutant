@@ -31,22 +31,23 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
-    // Bind IPv4 only (adj-9tqx4). USE http://127.0.0.1:4200 — not localhost:4200.
+    // Listen dual-stack so plain `localhost:4200` works in every browser.
     //
-    // On this machine, IPv6 loopback to ports 4200/4201 stalls: requests to
-    // [::1]:4200 hang to the client's 30s timeout while the identical request to
-    // 127.0.0.1:4200 answers in ~6ms, and the dev server logs a 200 either way.
-    // A bare node server on an unused port is clean over ::1, so the mechanism is
-    // still open (adj-8u5vq) — but every measurement says: do not serve IPv6 here.
+    // Do NOT narrow this to one family. An IPv4-only listener leaves nothing on
+    // ::1, and Safari does not fall back to 127.0.0.1 the way Chrome does — it
+    // fails outright with "Safari Can't Connect to the Server" and every fetch
+    // then reports "due to access control checks".
     //
-    // Both alternatives are worse:
-    //   - host: true (dual-stack) -> Safari connects over ::1 and HANGS.
-    //   - host: "0.0.0.0" + browsing to `localhost` -> Safari refuses to fall
-    //     back to 127.0.0.1 and shows "Safari Can't Connect to the Server".
-    // Binding IPv4 and addressing the server as 127.0.0.1 avoids both: no IPv6
-    // listener to stall on, and no name resolution for the browser to get wrong.
-    // 0.0.0.0 rather than 127.0.0.1 keeps ngrok + LAN reachability.
-    host: "0.0.0.0",
+    // The 30s stalls that made IPv6 look guilty were NOT the listener. Measured
+    // on a warm dual-stack server: [::1] is 20/20 fast for the page, 20/20 for
+    // proxied /api, and the /ws upgrade returns 101. The earlier "IPv6 hangs"
+    // reading was taken against a Vite that had just restarted and was still
+    // dependency-optimizing — a cold-start artifact, not an address-family one.
+    //
+    // What actually had to change is the proxy hop below: targets are explicit
+    // 127.0.0.1 literals (not "localhost"), so requests leaving this dev server
+    // never reach the backend over IPv6.
+    host: true,
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
