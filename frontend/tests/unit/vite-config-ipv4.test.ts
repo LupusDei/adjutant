@@ -39,21 +39,20 @@ const config = viteConfig as unknown as {
   };
 };
 
-describe("vite dev server binding (adj-9tqx4)", () => {
-  it("should bind IPv4 only — native IPv6 loopback to this port is broken here", () => {
-    // [::1]:4200 stalls to the client timeout (17/20) while IPv4 on the same
-    // dual-stack socket is 0/20 slow. Serving IPv6 means a browser that picks
-    // ::1 hangs 30s instead of failing over, so don't serve it.
-    expect(config.server?.host).toBe("0.0.0.0");
+describe("vite dev server binding (adj-e4rkt)", () => {
+  it("should listen dual-stack so localhost works in every browser", () => {
+    // Safari does not fall back to 127.0.0.1 when nothing answers on ::1, and
+    // it fails BEFORE reaching the server, so no server-side redirect can
+    // rescue an IPv4-only bind. Measured warm, [::1] is 0/25 slow here.
+    expect(config.server?.host).toBe(true);
   });
 
-  it("should not narrow to loopback-only, so ngrok and LAN still reach it", () => {
+  it("should not narrow the bind to a single family", () => {
     const host = config.server?.host;
 
-    // 127.0.0.1 would also dodge IPv6 but breaks tunnel/LAN reachability.
+    expect(host).not.toBe("0.0.0.0");
     expect(host).not.toBe("127.0.0.1");
     expect(host).not.toBe("::1");
-    expect(host).not.toBe(true);
   });
 });
 
@@ -88,97 +87,5 @@ describe("vite proxy targets (adj-plck0)", () => {
     const ws = proxy["/ws"];
     expect(ws?.ws).toBe(true);
     expect(String(ws?.target)).toMatch(/^http:\/\/127\.0\.0\.1:\d+/);
-  });
-});
-
-describe("localhost -> 127.0.0.1 redirect plugin (adj-e4rkt)", () => {
-  interface Captured {
-    status?: number;
-    headers?: Record<string, string>;
-    ended: boolean;
-    nextCalled: boolean;
-  }
-
-  /** Run the plugin's middleware against a fake request and capture the result. */
-  function run(host: string | undefined, url = "/"): Captured {
-    const plugins = (viteConfig as unknown as { plugins: unknown[] }).plugins.flat();
-    const plugin = plugins.find(
-      (p): p is { configureServer: (s: unknown) => void } =>
-        typeof p === "object" &&
-        p !== null &&
-        (p as { name?: string }).name === "adjutant:redirect-localhost-to-ipv4",
-    );
-    if (!plugin) throw new Error("redirect plugin not registered");
-
-    const out: Captured = { ended: false, nextCalled: false };
-    let handler: ((req: unknown, res: unknown, next: () => void) => void) | undefined;
-    plugin.configureServer({
-      middlewares: {
-        use: (fn: (req: unknown, res: unknown, next: () => void) => void) => {
-          handler = fn;
-        },
-      },
-    });
-    if (!handler) throw new Error("middleware not registered");
-
-    handler(
-      { headers: { host }, url },
-      {
-        writeHead: (status: number, headers: Record<string, string>) => {
-          out.status = status;
-          out.headers = headers;
-        },
-        end: () => {
-          out.ended = true;
-        },
-      },
-      () => {
-        out.nextCalled = true;
-      },
-    );
-    return out;
-  }
-
-  it("should redirect a localhost request to the 127.0.0.1 origin", () => {
-    const r = run("localhost:4200", "/agents");
-
-    // Without this the tab's HMR socket targets ::1, times out at hmrTimeout
-    // (30s) and Vite force-reloads the whole page — repeatedly.
-    expect(r.status).toBe(307);
-    expect(r.headers?.["Location"]).toBe("http://127.0.0.1:4200/agents");
-    expect(r.ended).toBe(true);
-    expect(r.nextCalled).toBe(false);
-  });
-
-  it("should not redirect a request that already arrived on 127.0.0.1", () => {
-    const r = run("127.0.0.1:4200");
-
-    // Guards against an infinite redirect loop.
-    expect(r.status).toBeUndefined();
-    expect(r.nextCalled).toBe(true);
-  });
-
-  it("should not redirect tunnel or LAN hosts", () => {
-    for (const host of ["adjutant.6lock.ngrok.io", "192.168.1.50:4200", "[::1]:4200"]) {
-      const r = run(host);
-      // Redirecting these to 127.0.0.1 would point a remote device at itself.
-      expect(r.nextCalled).toBe(true);
-      expect(r.status).toBeUndefined();
-    }
-  });
-
-  it("should not match a hostname that merely starts with localhost", () => {
-    const r = run("localhostings.dev:4200");
-    expect(r.nextCalled).toBe(true);
-  });
-
-  it("should tolerate a missing Host header", () => {
-    const r = run(undefined);
-    expect(r.nextCalled).toBe(true);
-  });
-
-  it("should mark the redirect no-store so it is never cached", () => {
-    const r = run("localhost:4200");
-    expect(r.headers?.["Cache-Control"]).toBe("no-store");
   });
 });

@@ -1,6 +1,4 @@
 /// <reference types="vitest" />
-import type { IncomingMessage, ServerResponse } from "node:http";
-
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -29,70 +27,26 @@ const suppressProxyError = (
   }
 };
 
-/**
- * Redirect `localhost:<port>` to `127.0.0.1:<port>` (adj-e4rkt).
- *
- * Vite's HMR client derives its WebSocket host from the page's own URL, and
- * gives up after `hmrTimeout` (30s) by doing a FULL PAGE RELOAD. On this machine
- * native IPv6 loopback is blackholed, so a tab opened at `localhost:4200`
- * loads fine (the browser falls back to IPv4 for plain HTTP) but its HMR socket
- * lands on ::1 and never connects — so the page reloaded itself every ~30
- * seconds, mid-typing, forever, and dragged request timeouts along with it.
- *
- * Telling people "use 127.0.0.1" is not a fix; one stale tab or bookmark brings
- * it back. Redirecting makes the address bar — and therefore the HMR socket —
- * IPv4 no matter how the server was reached.
- *
- * Scoped to the literal `localhost` host ONLY: tunnel/LAN hosts (ngrok, the iOS
- * app) are untouched, so their HMR socket still targets the public origin.
- */
-const redirectLocalhostToIPv4 = {
-  name: "adjutant:redirect-localhost-to-ipv4",
-  configureServer(server: {
-    middlewares: {
-      use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
-    };
-  }) {
-    server.middlewares.use((req, res, next) => {
-      const host = req.headers.host ?? "";
-      // Exact-match the hostname so "localhostings.dev" or a LAN host can't match.
-      const [hostname] = host.split(":");
-      if (hostname !== "localhost") {
-        next();
-        return;
-      }
-      res.writeHead(307, {
-        Location: `http://127.0.0.1:${FRONTEND_PORT}${req.url ?? "/"}`,
-        // Never let a browser or proxy cache this hop.
-        "Cache-Control": "no-store",
-      });
-      res.end();
-    });
-  },
-};
-
 export default defineConfig({
-  plugins: [react(), tailwindcss(), redirectLocalhostToIPv4],
+  plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
-    // Bind IPv4 only. BROWSE TO http://127.0.0.1:4200 — `localhost:4200` is NOT
-    // equivalent on this machine (adj-9tqx4).
+    // Listen dual-stack so `localhost:4200` works in every browser (adj-e4rkt).
     //
-    // Native IPv6 loopback to this port is broken here, below the application:
-    // connections to [::1]:4200 stall to the client timeout (17/20 measured)
-    // while IPv4 on the SAME dual-stack socket is 0/20 slow and the dev server
-    // logs 200s for both. Verified it is not ours to fix — one correct `tcp46
-    // *.4200` listener, net.inet6.ip6.v6only=0, no second binder, macOS
-    // Application Firewall disabled, and the stalls persist with ngrok stopped.
-    // The SYNs are simply never answered. Tracked in adj-8u5vq.
+    // Do NOT narrow this to one family. Safari does not fall back to 127.0.0.1
+    // when nothing answers on ::1 — an IPv4-only listener makes localhost:4200
+    // fail outright there, and it fails BEFORE reaching the server, so no
+    // server-side redirect can rescue it.
     //
-    // Given that, serving IPv6 is strictly worse than not serving it: a browser
-    // that picks ::1 hangs for 30s instead of failing over. Binding IPv4 removes
-    // that path, and addressing the server as a literal 127.0.0.1 removes the
-    // name resolution that would send a browser there in the first place —
-    // which matters because Safari, unlike Chrome, does not fall back to IPv4
-    // when ::1 fails. 0.0.0.0 rather than 127.0.0.1 keeps ngrok + LAN working.
-    host: "0.0.0.0",
+    // IPv6 loopback here is healthy. Measured warm on this port, dual-stack:
+    // [::1] page 0/25 slow, [::1] /api 0/20 slow, HMR ws over [::1] 101. Every
+    // earlier reading that condemned IPv6 was taken against a server that had
+    // just restarted and was still dependency-optimizing (a cold request
+    // measured 90s, then 3ms warm) — a cold-start artifact, not IPv6.
+    //
+    // The proxy targets below stay explicit 127.0.0.1 literals so the hop to
+    // the backend never depends on name resolution.
+    host: true,
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
