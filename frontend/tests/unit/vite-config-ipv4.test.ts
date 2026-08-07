@@ -40,21 +40,17 @@ const config = viteConfig as unknown as {
 };
 
 describe("vite dev server binding (adj-9tqx4)", () => {
-  it("should listen dual-stack so Safari can reach it over either family", () => {
-    // Regression: adj-plck0 briefly set this to "0.0.0.0" (IPv4 only) to dodge
-    // the IPv6 stall. Chrome falls back to 127.0.0.1 when ::1 is refused;
-    // Safari does NOT — it just shows "Safari Can't Connect to the Server".
-    // The dev server must answer on whichever family the browser picks.
-    expect(config.server?.host).toBe(true);
+  it("should bind IPv4 only — IPv6 loopback to this port stalls", () => {
+    // Measured on this stack: [::1]:4200 hangs to the 30s timeout while
+    // 127.0.0.1:4200 answers in ~6ms. Serving IPv6 here (host: true) means
+    // Safari connects over ::1 and hangs. Address the server as 127.0.0.1.
+    expect(config.server?.host).toBe("0.0.0.0");
   });
 
-  it("should not narrow the bind to a single family or to loopback-only", () => {
+  it("should not narrow to loopback-only, so ngrok and LAN still reach it", () => {
     const host = config.server?.host;
-
-    // "0.0.0.0"/"127.0.0.1" drop the IPv6 listener (breaks Safari);
-    // "127.0.0.1"/"::1" would also break ngrok + LAN reachability.
-    expect(host).not.toBe("0.0.0.0");
     expect(host).not.toBe("127.0.0.1");
+    expect(host).not.toBe(true);
     expect(host).not.toBe("::1");
   });
 });

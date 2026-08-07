@@ -31,20 +31,22 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
-    // Listen dual-stack, so `localhost` works whichever family the browser
-    // picks (adj-9tqx4, refining adj-plck0).
+    // Bind IPv4 only (adj-9tqx4). USE http://127.0.0.1:4200 — not localhost:4200.
     //
-    // Safari does NOT fall back to 127.0.0.1 when ::1 is refused the way Chrome
-    // does — it just reports "Safari Can't Connect to the Server". So an
-    // IPv4-only listener here is not a safe way to dodge IPv6.
+    // On this machine, IPv6 loopback to ports 4200/4201 stalls: requests to
+    // [::1]:4200 hang to the client's 30s timeout while the identical request to
+    // 127.0.0.1:4200 answers in ~6ms, and the dev server logs a 200 either way.
+    // A bare node server on an unused port is clean over ::1, so the mechanism is
+    // still open (adj-8u5vq) — but every measurement says: do not serve IPv6 here.
     //
-    // Dropping IPv6 was never what fixed the 30s hangs anyway. A dual-stack bind
-    // is clean over ::1 (control server: 12/12 fast); the stall was the BACKEND's
-    // IPv6 accept path, reached through this dev server's proxy hop. That is
-    // fixed where it actually lives: the backend binds IPv4-only and every proxy
-    // target below is an explicit 127.0.0.1 literal, so no request from here can
-    // land on IPv6 no matter which family the browser used to reach us.
-    host: true,
+    // Both alternatives are worse:
+    //   - host: true (dual-stack) -> Safari connects over ::1 and HANGS.
+    //   - host: "0.0.0.0" + browsing to `localhost` -> Safari refuses to fall
+    //     back to 127.0.0.1 and shows "Safari Can't Connect to the Server".
+    // Binding IPv4 and addressing the server as 127.0.0.1 avoids both: no IPv6
+    // listener to stall on, and no name resolution for the browser to get wrong.
+    // 0.0.0.0 rather than 127.0.0.1 keeps ngrok + LAN reachability.
+    host: "0.0.0.0",
     // Allow ngrok and other tunneling services
     allowedHosts: true,
     proxy: {
