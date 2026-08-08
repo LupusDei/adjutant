@@ -91,13 +91,21 @@ multi-party channels — never build them as two systems (Rule 9).
 **Real-time fan-out** (`ws-server.ts`):
 ```
 DM:      wsBroadcast → ALL authenticated clients (scoped client-side by conversationId)
-Channel: wsBroadcastToConversation(id) → ONLY members who are subscribed (fail-closed)
+Channel: wsBroadcastToConversation(id) → subscribed members + the subscribed OPERATOR
+         (agents fail-closed on membership; operator "user" exempt — adj-egziw)
 ```
 - WS sync/replay (`clientMayReceive`) gates ONLY channel-kind conversations on membership;
   DMs replay freely (they are broadcast + client-scoped). This closes the channel
   sync-replay leak (adj-2jy4u) without dropping DM history.
 - `wsBroadcastToConversation` resolves membership via the conversation store and delivers
-  only to member + subscribed clients. Non-members never receive channel traffic.
+  to member + subscribed clients. Non-member AGENTS never receive channel traffic.
+- **Operator exemption** (adj-egziw): the operator (`identity: "user"`) receives channel
+  fan-out and sync replay for channels they are subscribed to even when not a member.
+  Rationale: agent-created channels (MCP `create_channel`) seed only the creating agent
+  as a member, and every REST read surface already serves the operator full channel
+  history — membership-gating only the live path made open iOS/web channel views
+  silently stale (pull-to-refresh worked, live updates never arrived). The subscribe
+  opt-in still applies; posting still requires membership.
 
 **Bleed-free contract**: `getMessages({conversationId})` and `searchMessages({conversationId})`
 scope STRICTLY to one conversation — no agent/recipient widening. Both web and iOS scope

@@ -129,6 +129,16 @@ export interface WsServerMessage {
   updatedAt?: string | undefined;
 }
 
+/**
+ * The dashboard operator's member identity (matches USER_MEMBER_ID across the
+ * REST/store layers). The operator is the system owner: every REST read surface
+ * already serves them any conversation's history without a membership check, so
+ * the channel fan-out/replay gates below exempt this identity too (adj-egziw) —
+ * membership-gating only the LIVE path made agent-created channels silently
+ * stale on open operator clients while pull-to-refresh worked.
+ */
+const OPERATOR_IDENTITY = "user";
+
 interface WsClient {
   ws: WebSocket;
   sessionId: string;
@@ -141,7 +151,8 @@ interface WsClient {
   /**
    * Conversations this client is actively subscribed to. Room-scoped broadcasts
    * (`wsBroadcastToConversation`) deliver only to clients subscribed here AND
-   * whose `identity` is a member of the conversation.
+   * whose `identity` is a member of the conversation (operator exempt — see
+   * {@link OPERATOR_IDENTITY}).
    */
   subscriptions: Set<string>;
   lastSeqSeen: number;
@@ -475,6 +486,10 @@ function clientMayReceive(client: WsClient, msg: WsServerMessage): boolean {
 
   // Only channels are membership-gated; DMs and unresolved ids replay freely.
   if (conversation?.kind !== "channel") return true;
+
+  // adj-egziw: the operator oversees every channel — REST already serves them
+  // full history, so gating replay only desynced reconnecting operator clients.
+  if (client.identity === OPERATOR_IDENTITY) return true;
 
   return conversationStore
     .getMembers(conversationId)
@@ -919,8 +934,15 @@ export function setConversationStore(store: ConversationStore): void {
  *
  * Unlike {@link wsBroadcast} (which blasts every authenticated client), this
  * delivers ONLY to clients that are BOTH (a) a member of the conversation and
- * (b) actively subscribed to it. Non-members receive nothing — this is the
- * authorization boundary for channel real-time delivery.
+ * (b) actively subscribed to it. Non-member agents receive nothing — this is
+ * the authorization boundary for channel real-time delivery.
+ *
+ * Operator exemption (adj-egziw): a subscribed client authenticated as the
+ * operator ({@link OPERATOR_IDENTITY}) is delivered to regardless of membership.
+ * Agent-created channels seed only the creating agent as a member, and every
+ * REST read surface already serves the operator any channel's history, so the
+ * membership gate here only made open operator clients (iOS/web) silently
+ * stale. The subscribe opt-in still applies — nothing blasts unsubscribed tabs.
  *
  * The message is still sequenced and buffered for replay so subscribed clients
  * can recover gaps via `sync`.
@@ -944,7 +966,8 @@ export function wsBroadcastToConversation(conversationId: string, msg: WsServerM
 
   for (const client of clients.values()) {
     if (!client.authenticated) continue;
-    if (!memberIds.has(client.identity)) continue;
+    // Membership gate — operator exempt (adj-egziw), agents fail-closed.
+    if (!memberIds.has(client.identity) && client.identity !== OPERATOR_IDENTITY) continue;
     if (!client.subscriptions.has(conversationId)) continue;
     send(client, msg);
   }

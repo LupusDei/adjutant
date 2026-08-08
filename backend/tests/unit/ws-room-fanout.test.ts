@@ -245,18 +245,66 @@ describe("ws-server room-scoped fan-out", () => {
       expect(memberNoSub.findAllSent("chat_message").some((m) => m.id === "nope")).toBe(false);
     });
 
-    it("should NOT deliver to a non-member even if they subscribed", async () => {
+    it("should NOT deliver to a non-member agent even if they subscribed", async () => {
       const mod = await loadModule();
       mod.initWebSocketServer({} as import("http").Server);
-      // chan-1 has only raynor; the connecting client identifies as "user".
+      // chan-1 has only raynor; the connecting client identifies as a DIFFERENT
+      // agent. Agents remain strictly membership-gated (fail-closed) — only the
+      // operator carries the adj-egziw oversight exemption below.
       mod.setConversationStore(makeConversationStore({ "chan-1": ["raynor"] }) as never);
 
-      const nonMember = connectAuthed("user");
+      const nonMember = connectAuthed("zeratul");
       nonMember._receiveMessage({ type: "subscribe", conversationId: "chan-1" });
 
       mod.wsBroadcastToConversation("chan-1", { type: "chat_message", id: "leak", body: "secret" });
 
       expect(nonMember.findAllSent("chat_message").some((m) => m.id === "leak")).toBe(false);
+    });
+
+    // ========================================================================
+    // adj-egziw: operator oversight exemption.
+    //
+    // Agent-created channels (MCP create_channel) seed only the creating agent
+    // as a member, so the operator ("user") is NOT a member of most squad
+    // channels. Every REST read surface already grants the operator full
+    // history (GET /api/conversations/:id/messages has no membership gate), so
+    // membership-gating the LIVE fan-out only made channels silently stale on
+    // open clients (iOS/web) while pull-to-refresh worked. The operator is the
+    // system owner — deliver to a subscribed operator client regardless of
+    // membership. Agents stay fail-closed.
+    // ========================================================================
+
+    it("should deliver a channel post to the subscribed operator even when not a member (adj-egziw)", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      // Agent-created channel: only the creating agent is a member.
+      mod.setConversationStore(makeConversationStore({ "chan-squad": ["raynor"] }) as never);
+
+      const operator = connectAuthed("user");
+      operator._receiveMessage({ type: "subscribe", conversationId: "chan-squad" });
+
+      mod.wsBroadcastToConversation("chan-squad", {
+        type: "chat_message",
+        id: "squad-update",
+        body: "live update the General must see",
+        conversationId: "chan-squad",
+      });
+
+      expect(operator.findAllSent("chat_message").some((m) => m.id === "squad-update")).toBe(true);
+    });
+
+    it("should NOT deliver to the operator when they have not subscribed, member or not", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      mod.setConversationStore(makeConversationStore({ "chan-squad": ["raynor"] }) as never);
+
+      // Operator connected but never subscribed — the room opt-in still applies,
+      // so channel traffic never blasts every operator tab/device.
+      const operator = connectAuthed("user");
+
+      mod.wsBroadcastToConversation("chan-squad", { type: "chat_message", id: "unsub", body: "x" });
+
+      expect(operator.findAllSent("chat_message").some((m) => m.id === "unsub")).toBe(false);
     });
 
     it("should not deliver a channel post to a subscriber of a different conversation", async () => {
@@ -315,10 +363,12 @@ describe("ws-server room-scoped fan-out", () => {
   // authorization boundary as live fan-out, and fail closed.
   // ==========================================================================
   describe("sync replay membership scoping (adj-2jy4u)", () => {
-    it("should NOT replay a channel message to a non-member via sync", async () => {
+    it("should NOT replay a channel message to a non-member agent via sync", async () => {
       const mod = await loadModule();
       mod.initWebSocketServer({} as import("http").Server);
-      // chan-secret has only raynor as a member; "user" is NOT a member.
+      // chan-secret has only raynor as a member; "zeratul" is NOT a member.
+      // (Agents are the security subject here — the operator carries the
+      // adj-egziw oversight exemption, tested below.)
       mod.setConversationStore(makeConversationStore({ "chan-secret": ["raynor"] }) as never);
 
       // A member subscribes and triggers a channel post so it lands in the
@@ -332,15 +382,42 @@ describe("ws-server room-scoped fan-out", () => {
         conversationId: "chan-secret",
       });
 
-      // A DIFFERENT client (the non-member "user") connects fresh and asks to
+      // A DIFFERENT client (the non-member agent) connects fresh and asks to
       // sync from the beginning. It must not receive the channel body.
-      const nonMember = connectAuthed("user");
+      const nonMember = connectAuthed("zeratul");
       nonMember._receiveMessage({ type: "sync", lastSeqSeen: 0 });
 
       const syncResp = nonMember.findSent("sync_response");
       expect(syncResp).toBeDefined();
       const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
       expect(missed.some((m) => m.id === "secret-body")).toBe(false);
+    });
+
+    it("should replay a channel message to the operator via sync even when not a member (adj-egziw)", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      // Agent-created channel: the operator is not in the member list, but the
+      // sync/replay boundary must match the live fan-out's operator exemption —
+      // otherwise a reconnecting operator silently loses exactly the messages
+      // the live path is now allowed to deliver.
+      mod.setConversationStore(makeConversationStore({ "chan-squad": ["raynor"] }) as never);
+
+      const member = connectAuthed("raynor");
+      member._receiveMessage({ type: "subscribe", conversationId: "chan-squad" });
+      mod.wsBroadcastToConversation("chan-squad", {
+        type: "chat_message",
+        id: "operator-recovers",
+        body: "squad chatter",
+        conversationId: "chan-squad",
+      });
+
+      const operator = connectAuthed("user");
+      operator._receiveMessage({ type: "sync", lastSeqSeen: 0 });
+
+      const syncResp = operator.findSent("sync_response");
+      expect(syncResp).toBeDefined();
+      const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
+      expect(missed.some((m) => m.id === "operator-recovers")).toBe(true);
     });
 
     it("should still replay a channel message to a member via sync", async () => {
