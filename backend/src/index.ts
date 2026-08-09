@@ -243,6 +243,9 @@ const bridgeToolBridge = createBridgeToolBridge({
   // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections via the
   // SAME memory store the MCP query_memories tool and the rest of the system read.
   memoryStore,
+  // adj-ni4dh — recent fleet activity: the avatar reads the SAME timeline the Timeline
+  // tab renders so it can summarize what's been happening across the fleet.
+  eventStore,
 });
 // Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
 // spoken status question resolves to real fleet data instead of stalling on "querying…".
