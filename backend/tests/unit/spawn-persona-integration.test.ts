@@ -554,6 +554,43 @@ describe("POST /api/sessions — persona integration", () => {
 });
 
 // ============================================================================
+// Tests: GET /api/agents/:agentId/persona-prompt (adj-j0jpz)
+// The seam the persona-inject hook curls to survive compaction, and the probe
+// `adjutant doctor` uses. Resolves by callsign; 404 = no persona (silent path).
+// ============================================================================
+
+describe("GET /api/agents/:agentId/persona-prompt — persona re-injection seam", () => {
+  let app: express.Express;
+
+  beforeEach(() => {
+    app = createAgentsApp();
+    vi.clearAllMocks();
+  });
+
+  it("returns the rendered persona prompt when the callsign has a linked persona", async () => {
+    mockPersonaService.getPersonaByCallsign.mockReturnValue(MOCK_PERSONA);
+    mockGeneratePersonaPrompt.mockReturnValue(MOCK_PROMPT);
+
+    const response = await request(app).get("/api/agents/tassadar/persona-prompt");
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.prompt).toBe(MOCK_PROMPT);
+    expect(response.body.data.personaId).toBe(MOCK_PERSONA.id);
+    expect(mockPersonaService.getPersonaByCallsign).toHaveBeenCalledWith("tassadar");
+  });
+
+  it("returns 404 (not an error) when the callsign has no linked persona — the silent path", async () => {
+    mockPersonaService.getPersonaByCallsign.mockReturnValue(null);
+
+    const response = await request(app).get("/api/agents/nobody/persona-prompt");
+
+    expect(response.status).toBe(404);
+    expect(response.body.success).toBe(false);
+  });
+});
+
+// ============================================================================
 // Tests: LifecycleManager — envVars support
 // ============================================================================
 

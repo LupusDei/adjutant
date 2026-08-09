@@ -39,6 +39,7 @@ import {
   type ClaudeSettings,
 } from "../lib/checks.js";
 import { PLUGIN_KEY, LEGACY_HOOK_COMMANDS } from "../lib/plugin.js";
+import { checkPersonaInjectWiring } from "../lib/persona-inject.js";
 import { getQualityFilePaths, QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 
 /** adj-013.3.1: File/directory existence checks. */
@@ -95,6 +96,10 @@ function checkFiles(cwd: string): CheckResult[] {
       ? { name: "API keys", status: "pass" }
       : { name: "API keys", status: "info", message: "open mode (no API keys)" },
   );
+
+  // adj-j0jpz: persona-injection wiring — is a spawned agent's persona re-injected after
+  // compaction in THIS project? warns (actionable) when the hook is missing/unregistered.
+  results.push(checkPersonaInjectWiring(cwd));
 
   return results;
 }

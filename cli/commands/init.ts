@@ -24,6 +24,7 @@ import {
   getGlobalAdjutantDir,
 } from "../lib/checks.js";
 import { installPlugin } from "../lib/plugin.js";
+import { installPersonaInjectHook } from "../lib/persona-inject.js";
 import { QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
@@ -577,6 +578,11 @@ export async function runInit(options: InitOptions): Promise<number> {
   const adjutantRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
   const pkg = JSON.parse(readFileSync(join(adjutantRoot, "package.json"), "utf-8"));
   results.push(...installPlugin(adjutantRoot, pkg.version));
+
+  // adj-j0jpz: make the project persona-ready — copy the persona-inject hook script in and
+  // register it under the "" and "compact" SessionStart matchers so a spawned agent's
+  // persona is re-injected after compaction, even outside the adjutant repo. Idempotent.
+  results.push(installPersonaInjectHook(projectRoot, adjutantRoot));
 
   // Adjutant-project-specific checks (only when running inside the adjutant repo)
   const isAdjutantProject = fileExists(join(projectRoot, "package.json")) &&
