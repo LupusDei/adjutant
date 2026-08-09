@@ -154,6 +154,45 @@ describe("agent-spawner-service", () => {
       );
     });
 
+    it("should inject personaPrompt into the initial prompt so the persona reaches turn-1 context (adj-j0jpz)", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-persona" });
+
+      await spawnAgent({
+        name: "tassadar",
+        projectPath: "/tmp/syl",
+        isolation: "worktree",
+        agentFile: "tassadar",
+        personaPrompt: "You are Tassadar. Templar judgment, executor of the fleet.",
+        initialPrompt: "Work on adj-999.",
+      });
+
+      const call = mockBridgeCreateSession.mock.calls[0][0];
+      // The persona must be in the prompt (project-agnostic delivery), before the task.
+      expect(call.initialPrompt).toContain("You are Tassadar.");
+      expect(call.initialPrompt).toContain("Work on adj-999.");
+      expect(call.initialPrompt.indexOf("You are Tassadar.")).toBeLessThan(
+        call.initialPrompt.indexOf("Work on adj-999."),
+      );
+    });
+
+    it("should NOT inject a genesis prompt when a personaPrompt is provided (mutually exclusive) (adj-j0jpz)", async () => {
+      mockListTmuxSessions.mockResolvedValue(new Set());
+      mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-nogen" });
+
+      await spawnAgent({
+        name: "tassadar",
+        projectPath: "/tmp/syl",
+        agentFile: "tassadar",
+        personaPrompt: "You are Tassadar.",
+      });
+
+      // Genesis resolution (getPersonaByCallsign) must not run — persona is already known.
+      expect(mockGetPersonaByCallsign).not.toHaveBeenCalled();
+      const call = mockBridgeCreateSession.mock.calls[0][0];
+      expect(call.initialPrompt).toContain("You are Tassadar.");
+    });
+
     it("should return success with sessionId on successful spawn", async () => {
       mockListTmuxSessions.mockResolvedValue(new Set());
       mockBridgeCreateSession.mockResolvedValue({

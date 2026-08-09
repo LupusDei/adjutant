@@ -241,6 +241,15 @@ agentsRouter.post("/spawn", async (req, res) => {
     initialPrompt = constitutionPrompt;
   }
 
+  // adj-j0jpz: inject the persona prompt into the turn-1 context too, not just via the
+  // --agent file — a prompt injection is project-agnostic and doesn't depend on the agent
+  // file resolving in the spawned session's cwd. Order: constitution → persona → task.
+  if (personaPrompt) {
+    initialPrompt = initialPrompt
+      ? `${initialPrompt}\n\n---\n\n${personaPrompt}`
+      : personaPrompt;
+  }
+
   const result = await bridge.createSession({
     name,
     projectPath: effectiveProjectPath,

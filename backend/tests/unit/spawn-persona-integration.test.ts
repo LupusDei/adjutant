@@ -249,9 +249,13 @@ describe("POST /api/agents/spawn — persona integration", () => {
     // Should have written agent file with correct args
     expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT, "System design specialist");
 
-    // Persona should be deployed via --agent flag, NOT initialPrompt
+    // adj-j0jpz: the persona must ALSO be injected into initialPrompt, not ONLY the
+    // --agent file. The old assertion here was `initialPrompt).toBeUndefined()` — it
+    // encoded the exact bug: the --agent file silently fails to resolve when the agent
+    // runs outside the adjutant repo / in a worktree, leaving the agent with no persona.
+    // A prompt injection is project-agnostic, so it must be present. Both mechanisms fire.
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.initialPrompt).toBeUndefined();
+    expect(createCall.initialPrompt).toContain(MOCK_PROMPT);
     expect(createCall.claudeArgs).toContain("--agent");
     expect(createCall.claudeArgs).toContain("architect");
     expect(createCall.envVars).toEqual(
@@ -459,9 +463,13 @@ describe("POST /api/sessions — persona integration", () => {
     // Should have written agent file with correct args
     expect(mockWriteAgentFile).toHaveBeenCalledWith("/test/project", "Architect", MOCK_PROMPT, "System design specialist");
 
-    // Persona should be deployed via --agent flag, NOT initialPrompt
+    // adj-j0jpz: the persona must ALSO be injected into initialPrompt, not ONLY the
+    // --agent file. The old assertion here was `initialPrompt).toBeUndefined()` — it
+    // encoded the exact bug: the --agent file silently fails to resolve when the agent
+    // runs outside the adjutant repo / in a worktree, leaving the agent with no persona.
+    // A prompt injection is project-agnostic, so it must be present. Both mechanisms fire.
     const createCall = mockBridge.createSession.mock.calls[0][0];
-    expect(createCall.initialPrompt).toBeUndefined();
+    expect(createCall.initialPrompt).toContain(MOCK_PROMPT);
     expect(createCall.claudeArgs).toContain("--agent");
     expect(createCall.claudeArgs).toContain("architect");
     expect(createCall.envVars).toEqual(
@@ -539,8 +547,9 @@ describe("POST /api/sessions — persona integration", () => {
     expect(createCall.claudeArgs).toContain("--agent");
     expect(createCall.claudeArgs).toContain("architect");
     expect(createCall.claudeArgs).not.toContain("--prompt");
-    // No initialPrompt — persona goes via agent file
-    expect(createCall.initialPrompt).toBeUndefined();
+    // adj-j0jpz: persona is now ALSO injected into initialPrompt (project-agnostic),
+    // in addition to the --agent file. It must be present, not undefined.
+    expect(createCall.initialPrompt).toContain(MOCK_PROMPT);
   });
 });
 

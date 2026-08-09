@@ -214,12 +214,13 @@ export function registerCoordinationTools(
       // (adj-180: the --agent flag alone is insufficient for untracked/gitignored files)
       // If no, the agent-spawner-service will handle genesis prompt injection.
       let agentFile: string | undefined;
+      let personaPrompt: string | undefined;
       let spawnEnvVars: Record<string, string> | undefined;
       const personaService = getPersonaService();
       if (personaService) {
         const linkedPersona = personaService.getPersonaByCallsign(name);
         if (linkedPersona) {
-          const personaPrompt = generatePrompt(linkedPersona);
+          personaPrompt = generatePrompt(linkedPersona);
           const agentName_sanitized = await writeAgentFile(resolvedProjectPath, linkedPersona.name, personaPrompt, linkedPersona.description);
           agentFile = agentName_sanitized;
           spawnEnvVars = { ADJUTANT_PERSONA_ID: linkedPersona.id };
@@ -235,6 +236,9 @@ export function registerCoordinationTools(
         // never touch the watched canonical checkout and bounce every session (adj-8mmyd).
         isolation: "worktree",
         ...(agentFile ? { agentFile } : {}),
+        // adj-j0jpz: pass the rendered persona prompt so the spawner injects it into the
+        // turn-1 context — the project-agnostic delivery path that works outside adjutant.
+        ...(personaPrompt ? { personaPrompt } : {}),
         ...(spawnEnvVars ? { envVars: spawnEnvVars } : {}),
       });
 

@@ -118,6 +118,16 @@ export interface SpawnAgentRequest {
   projectPath: string;
   /** Agent file to load (e.g., "adjutant") — passed as --agent flag */
   agentFile?: string;
+  /**
+   * Rendered persona prompt to inject directly into the spawn's initial prompt (adj-j0jpz).
+   * This is the PRIMARY, project-agnostic delivery path: unlike the `--agent` file or the
+   * SessionStart hook, a prompt injection needs nothing from the target project (no hook
+   * registered, no on-disk agent file, no worktree cooperation), so a persona reaches the
+   * agent's turn-1 context even when spawned into a non-adjutant repo. Callers that have a
+   * linked persona pass its `generatePrompt(...)` output here; the on-disk agent file and
+   * hook remain as the re-injection cache for surviving compaction.
+   */
+  personaPrompt?: string;
   /** Session mode: "swarm" or "standalone" */
   mode?: "swarm" | "standalone";
   /** Additional Claude CLI args */
@@ -252,7 +262,23 @@ export async function spawnAgent(
     // and no agent file is specified, prepend a genesis prompt so the agent
     // creates its persona before starting work.
     let effectivePrompt = req.initialPrompt;
-    if (!req.agentFile) {
+
+    // adj-j0jpz: inject the persona prompt DIRECTLY into the spawn prompt. This is the
+    // primary, project-agnostic delivery — it needs nothing from the target project (no
+    // registered hook, no on-disk agent file, no worktree cooperation), so the persona
+    // reaches turn-1 context even for agents spawned into a non-adjutant repo (the exact
+    // failure in this bug). Goes before the task; the constitution is prepended after this
+    // so final order is constitution → persona → task.
+    if (req.personaPrompt) {
+      effectivePrompt = effectivePrompt
+        ? `${req.personaPrompt}\n\n---\n\n${effectivePrompt}`
+        : req.personaPrompt;
+      logInfo("Injecting persona prompt into spawn prompt", { name: req.name });
+    }
+
+    // Genesis is only for callsigns with NO persona at all — never when a persona prompt
+    // was injected above (mutually exclusive).
+    if (!req.agentFile && !req.personaPrompt) {
       const personaService = getPersonaService();
       if (personaService) {
         const existingPersona = personaService.getPersonaByCallsign(req.name);
