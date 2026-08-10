@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createArtifactsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
@@ -31,6 +31,7 @@ import { registerProposalTools } from "./services/mcp-tools/proposals.js";
 import { registerQuestionTools } from "./services/mcp-tools/questions.js";
 import { registerAutoDevelopTools } from "./services/mcp-tools/auto-develop.js";
 import { createProposalStore, migrateProposalProjectNames } from "./services/proposal-store.js";
+import { createArtifactStore } from "./services/artifact-store.js";
 import { backfillConversations } from "./services/conversation-backfill.js";
 import { createConversationStore } from "./services/conversation-store.js";
 import { createConversationsRouter } from "./routes/conversations.js";
@@ -111,6 +112,8 @@ const uploadStorage = createUploadStorage();
 uploadStorage.ensureDir();
 const uploadService = createUploadService({ storage: uploadStorage, attachmentStore });
 const proposalStore = createProposalStore(messageDb);
+// adj-j7az6 — global/personal Artifacts store (no project scoping). Shares the message DB.
+const artifactStore = createArtifactStore(messageDb);
 const conversationStore = createConversationStore(messageDb, messageStore);
 migrateProposalProjectNames(messageDb);
 // adj-164.1.4 — backfill legacy messages into DM conversations. Idempotent:
@@ -409,6 +412,9 @@ app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
 app.use("/api/overview", createOverviewRouter(messageStore, coordinationOverviewService));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
+// adj-j7az6 — Artifacts REST API (authed owner surface). Public /a/:token is mounted
+// BEFORE apiKeyAuth (beside /p).
+app.use("/api/artifacts", createArtifactsRouter(artifactStore));
 
 // adj-181.3 — agent question triage REST API (service constructed above the /avatar mount).
 app.use("/api/questions", createQuestionsRouter(questionService));
