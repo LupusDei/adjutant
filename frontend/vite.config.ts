@@ -95,6 +95,20 @@ export default defineConfig({
           proxy.on("error", suppressProxyError);
         },
       },
+      // Public artifact share pages (adj-j7az6) are served by the backend at /a/:token
+      // (+ /a/:token/download). Same rationale as /p — proxy them so no-API-key share
+      // links work through the dev tunnel, matching the single-origin production deploy.
+      // The key MUST keep the trailing slash: a bare "/a" prefix would also swallow
+      // "/api", "/avatar", and "/assets" (all start with "/a"); "/a/" matches only
+      // "/a/<token>" paths (adj-j7az6.6).
+      "/a/": {
+        target: API_TARGET,
+        changeOrigin: true,
+        agent: keepAliveAgent,
+        configure: (proxy) => {
+          proxy.on("error", suppressProxyError);
+        },
+      },
       // The Bridge avatar prototype (adj-202.2) is served by the backend at /avatar
       // (page) + /avatar/connect (session). Proxy it so the iOS WKWebView overlay,
       // which loads <tunnel>/avatar through the frontend origin, reaches the backend
