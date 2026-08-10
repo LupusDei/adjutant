@@ -1,22 +1,43 @@
 import { z } from "zod";
 
 // =============================================================================
+// Size caps — shared by the REST schemas (below) AND the MCP create_artifact /
+// publish tools (adj-j7az6.5.7). The /a/:token public route sanitizes each html
+// body per request on an UNAUTHENTICATED surface, so an unbounded blob is a
+// compute-amplification DoS. Caps are enforced at the Zod boundary before the
+// document reaches the store or the compose pipeline. Exported from ONE place so
+// REST and MCP share the exact same numbers (no duplication).
+// =============================================================================
+
+/**
+ * Maximum size (in characters / UTF-16 code units) of a self-contained `html` body.
+ * 256 KiB — mirrors the adj-200 proposal cap.
+ */
+export const MAX_HTML_CHARS = 256 * 1024;
+/** Maximum artifact title length. */
+export const MAX_TITLE_CHARS = 300;
+/** Maximum artifact description (summary) length. */
+export const MAX_DESCRIPTION_CHARS = 2000;
+/** Maximum artifact slug length (the download-filename source; sliced further at compose). */
+export const MAX_SLUG_CHARS = 200;
+
+// =============================================================================
 // Zod Schemas — API boundary validation (adj-j7az6)
 // =============================================================================
 
 export const CreateArtifactSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  html: z.string().min(1, "HTML is required"),
-  description: z.string().optional(),
-  slug: z.string().optional(),
+  title: z.string().min(1, "Title is required").max(MAX_TITLE_CHARS),
+  html: z.string().min(1, "HTML is required").max(MAX_HTML_CHARS),
+  description: z.string().max(MAX_DESCRIPTION_CHARS).optional(),
+  slug: z.string().max(MAX_SLUG_CHARS).optional(),
 });
 
 export const UpdateArtifactSchema = z
   .object({
-    title: z.string().min(1).optional(),
-    html: z.string().min(1).optional(),
-    description: z.string().optional(),
-    slug: z.string().optional(),
+    title: z.string().min(1).max(MAX_TITLE_CHARS).optional(),
+    html: z.string().min(1).max(MAX_HTML_CHARS).optional(),
+    description: z.string().max(MAX_DESCRIPTION_CHARS).optional(),
+    slug: z.string().max(MAX_SLUG_CHARS).optional(),
   })
   .refine(
     (data) =>
