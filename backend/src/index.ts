@@ -28,6 +28,7 @@ import { createAgentStatusStore } from "./services/agent-status-store.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
+import { registerArtifactTools } from "./services/mcp-tools/artifacts.js";
 import { registerQuestionTools } from "./services/mcp-tools/questions.js";
 import { registerAutoDevelopTools } from "./services/mcp-tools/auto-develop.js";
 import { createProposalStore, migrateProposalProjectNames } from "./services/proposal-store.js";
@@ -678,6 +679,7 @@ const server = app.listen(PORT_NUMBER, BIND_HOST, () => {
     registerBeadTools(server, eventStore, proposalStore, messageDb);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
+    registerArtifactTools(server, artifactStore);
     registerAutoDevelopTools(server, proposalStore, autoDevelopStore, { adjutantState, stimulusEngine });
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);
