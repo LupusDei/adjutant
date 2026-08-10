@@ -112,6 +112,7 @@ import {
   setToolRegistrar,
   getConnectedAgents,
   getAgentBySession,
+  DISCONNECT_DEBOUNCE_MS,
 } from "../../src/services/mcp-server.js";
 import { mcpRouter } from "../../src/routes/mcp.js";
 
@@ -126,6 +127,9 @@ describe("MCP Streamable HTTP Integration", () => {
   });
 
   it("full lifecycle: initialize → tool call → disconnect", async () => {
+    // Fake timers so the debounced agent_disconnected (adj-vnl3r) can be
+    // advanced deterministically at the end of the lifecycle.
+    vi.useFakeTimers();
     // Step 1: Agent sends initialization POST (no session ID)
     const initReq = createMockReq({
       method: "POST",
@@ -174,15 +178,24 @@ describe("MCP Streamable HTTP Integration", () => {
     expect(getConnectedAgents()).toHaveLength(0);
     expect(getAgentBySession("smoke-session-1")).toBeUndefined();
 
-    // Verify EventBus events fired
+    // Verify EventBus events fired. agent_connected is immediate;
+    // agent_disconnected is DEBOUNCED (adj-vnl3r) — it only surfaces after
+    // DISCONNECT_DEBOUNCE_MS with no reconnect, so the churn of transport
+    // re-establishment never wakes the coordinator as a false agent death.
     expect(mockBus.emit).toHaveBeenCalledWith(
       "mcp:agent_connected",
       expect.objectContaining({ agentId: "smoke-agent" }),
     );
+    expect(mockBus.emit).not.toHaveBeenCalledWith(
+      "mcp:agent_disconnected",
+      expect.anything(),
+    );
+    await vi.advanceTimersByTimeAsync(DISCONNECT_DEBOUNCE_MS + 1);
     expect(mockBus.emit).toHaveBeenCalledWith(
       "mcp:agent_disconnected",
       expect.objectContaining({ agentId: "smoke-agent" }),
     );
+    vi.useRealTimers();
   });
 
   it("multiple agents can have independent sessions", async () => {

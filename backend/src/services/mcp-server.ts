@@ -82,6 +82,79 @@ function isPlaceholderAgentId(agentId: string): boolean {
   return agentId === "unknown" || agentId.startsWith("unknown-agent-");
 }
 
+// ============================================================================
+// agent_disconnected debounce (adj-vnl3r)
+//
+// Every mcp:agent_disconnected is classified CRITICAL by the coordinator's
+// signal-aggregator and burns a wake. Backend restarts and routine client
+// transport re-establishment made every close look like an agent death —
+// hundreds of false-critical wakes per weekend. Contract: a disconnect only
+// surfaces if the agent does NOT reconnect within DISCONNECT_DEBOUNCE_MS.
+// ============================================================================
+
+/**
+ * How long a disconnect must persist before `mcp:agent_disconnected` is
+ * emitted. A reconnect inside this window cancels the event entirely — the
+ * churn (restart storms, transport re-establishment) never reaches consumers,
+ * while a genuinely dead agent still surfaces one debounce-window later.
+ */
+export const DISCONNECT_DEBOUNCE_MS = 30_000;
+
+/** Pending debounced disconnect timers, keyed by agentId. */
+const pendingDisconnects = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Whether the agent currently has ANY live tracked connection. */
+function isAgentConnected(agentId: string): boolean {
+  for (const conn of connections.values()) {
+    if (conn.agentId === agentId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Schedule a debounced `mcp:agent_disconnected`. If the same agent reconnects
+ * before the window elapses, {@link cancelPendingDisconnect} (called from the
+ * connect path) suppresses the event. At fire time the agent's liveness is
+ * re-checked as belt-and-braces, so a live agent is never reported dead even
+ * if a cancel was missed. Timers are unref'd — they never hold the process
+ * open, which also means a backend shutdown drops its own pending churn
+ * instead of reporting the whole fleet dead on the way down.
+ */
+function scheduleAgentDisconnectedEvent(agentId: string, sessionId: string): void {
+  const existing = pendingDisconnects.get(agentId);
+  if (existing !== undefined) {
+    clearTimeout(existing);
+  }
+  const timer = setTimeout(() => {
+    pendingDisconnects.delete(agentId);
+    if (isAgentConnected(agentId)) {
+      return; // reconnected — not a death, nothing to report
+    }
+    getEventBus().emit("mcp:agent_disconnected", { agentId, sessionId });
+  }, DISCONNECT_DEBOUNCE_MS);
+  timer.unref?.();
+  pendingDisconnects.set(agentId, timer);
+}
+
+/** Cancel a pending debounced disconnect (the agent came back). */
+function cancelPendingDisconnect(agentId: string): void {
+  const timer = pendingDisconnects.get(agentId);
+  if (timer !== undefined) {
+    clearTimeout(timer);
+    pendingDisconnects.delete(agentId);
+  }
+}
+
+/** Clear all pending disconnect timers (shutdown/reset). */
+function clearPendingDisconnects(): void {
+  for (const timer of pendingDisconnects.values()) {
+    clearTimeout(timer);
+  }
+  pendingDisconnects.clear();
+}
+
 function evictSupersededConnections(agentId: string, keepSessionId: string): void {
   if (isPlaceholderAgentId(agentId)) {
     return;
@@ -98,7 +171,10 @@ function evictSupersededConnections(agentId: string, keepSessionId: string): voi
       supersededSessionId: sid,
       newSessionId: keepSessionId,
     });
-    getEventBus().emit("mcp:agent_disconnected", { agentId, sessionId: sid });
+    // adj-vnl3r: deliberately NO mcp:agent_disconnected here. Supersession
+    // happens at the exact moment the SAME agent establishes a newer live
+    // session — the agent is by definition connected. Emitting "disconnected"
+    // told every consumer a healthy agent died on every reconnect.
   }
 }
 
@@ -146,10 +222,7 @@ export function reapStaleSessions(
       sessionId: sid,
       idleMs: now - conn.lastActivityAt.getTime(),
     });
-    getEventBus().emit("mcp:agent_disconnected", {
-      agentId: conn.agentId,
-      sessionId: sid,
-    });
+    scheduleAgentDisconnectedEvent(conn.agentId, sid);
   }
   return reaped;
 }
@@ -219,6 +292,7 @@ export function resetMcpServer(): void {
   connections.clear();
   toolRegistrar = null;
   stopMcpSessionReaper();
+  clearPendingDisconnects();
 }
 
 /**
@@ -411,6 +485,10 @@ export async function createSessionTransport(
       };
       connections.set(sessionId, connection);
 
+      // adj-vnl3r: the agent is back — cancel any pending debounced
+      // disconnect so routine reconnects never surface as deaths.
+      cancelPendingDisconnect(agentId);
+
       logInfo("MCP agent connected", {
         agentId,
         sessionId,
@@ -432,10 +510,7 @@ export async function createSessionTransport(
         agentId: connection.agentId,
         sessionId,
       });
-      getEventBus().emit("mcp:agent_disconnected", {
-        agentId: connection.agentId,
-        sessionId,
-      });
+      scheduleAgentDisconnectedEvent(connection.agentId, sessionId);
     },
   });
 
@@ -482,10 +557,7 @@ export function disconnectAgent(sessionId: string): void {
     sessionId,
   });
 
-  getEventBus().emit("mcp:agent_disconnected", {
-    agentId: connection.agentId,
-    sessionId,
-  });
+  scheduleAgentDisconnectedEvent(connection.agentId, sessionId);
 }
 
 /**
@@ -652,6 +724,10 @@ export async function recoverSession(
       projectContext,
     };
     connections.set(sessionId, connection);
+
+    // adj-vnl3r: recovery is a reconnect — cancel any pending debounced
+    // disconnect so it never surfaces as a death.
+    cancelPendingDisconnect(agentId);
 
     logInfo("MCP session recovered", { agentId, sessionId, projectId: projectContext?.projectId });
     getEventBus().emit("mcp:agent_connected", { agentId, sessionId });

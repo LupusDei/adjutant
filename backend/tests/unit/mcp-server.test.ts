@@ -114,6 +114,7 @@ import {
   setToolRegistrar,
   recoverSession,
   reapStaleSessions,
+  DISCONNECT_DEBOUNCE_MS,
 } from "../../src/services/mcp-server.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getEventBus } from "../../src/services/event-bus.js";
@@ -339,24 +340,38 @@ describe("MCP Server", () => {
       expect(getConnectedAgents()).toHaveLength(0);
     });
 
-    it("should emit mcp:agent_disconnected on session close", async () => {
-      const bus = getEventBus();
-      await createSessionTransport("researcher");
+    it("should emit mcp:agent_disconnected after the debounce window on session close (adj-vnl3r)", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await createSessionTransport("researcher");
 
-      const transport = createdTransports[0]!;
-      transport.sessionId = "session-abc";
-      transport._onsessioninitialized!("session-abc");
-      vi.clearAllMocks();
+        const transport = createdTransports[0]!;
+        transport.sessionId = "session-abc";
+        transport._onsessioninitialized!("session-abc");
+        vi.clearAllMocks();
 
-      transport._onsessionclosed!("session-abc");
+        transport._onsessionclosed!("session-abc");
 
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_disconnected",
-        expect.objectContaining({
-          agentId: "researcher",
-          sessionId: "session-abc",
-        }),
-      );
+        // Debounced: nothing fires at close time…
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+
+        // …but a real (non-reconnecting) disconnect still surfaces after the window.
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS + 1);
+
+        expect(bus.emit).toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.objectContaining({
+            agentId: "researcher",
+            sessionId: "session-abc",
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("should only remove the specified session", async () => {
@@ -393,23 +408,35 @@ describe("MCP Server", () => {
       expect(getConnectedAgents()).toHaveLength(0);
     });
 
-    it("should emit mcp:agent_disconnected event", async () => {
-      const bus = getEventBus();
-      await createSessionTransport("researcher");
-      const transport = createdTransports[0]!;
-      transport.sessionId = "session-abc";
-      transport._onsessioninitialized!("session-abc");
-      vi.clearAllMocks();
+    it("should emit mcp:agent_disconnected after the debounce window (adj-vnl3r)", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await createSessionTransport("researcher");
+        const transport = createdTransports[0]!;
+        transport.sessionId = "session-abc";
+        transport._onsessioninitialized!("session-abc");
+        vi.clearAllMocks();
 
-      disconnectAgent("session-abc");
+        disconnectAgent("session-abc");
 
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_disconnected",
-        expect.objectContaining({
-          agentId: "researcher",
-          sessionId: "session-abc",
-        }),
-      );
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS + 1);
+
+        expect(bus.emit).toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.objectContaining({
+            agentId: "researcher",
+            sessionId: "session-abc",
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("should handle disconnect of unknown session gracefully", () => {
@@ -659,17 +686,27 @@ describe("MCP Server", () => {
       expect(getConnectedAgents()[0]!.sessionId).toBe("s-49");
     });
 
-    it("should emit mcp:agent_disconnected for the superseded session", async () => {
-      const bus = getEventBus();
-      await connect("researcher", "session-1");
-      vi.clearAllMocks();
+    it("should NOT emit mcp:agent_disconnected for a superseded session (adj-vnl3r)", async () => {
+      // Supersession happens at the exact moment the SAME agent establishes a
+      // NEWER live session — the agent is by definition connected. Emitting
+      // "disconnected" here told every consumer (dashboard timeline, coordinator
+      // critical-wake classifier) that a healthy agent died on every reconnect.
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("researcher", "session-1");
+        vi.clearAllMocks();
 
-      await connect("researcher", "session-2");
+        await connect("researcher", "session-2");
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS * 2);
 
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_disconnected",
-        expect.objectContaining({ agentId: "researcher", sessionId: "session-1" }),
-      );
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     // Regression: supersession must NOT collapse non-unique placeholder ids.
@@ -742,15 +779,184 @@ describe("MCP Server", () => {
       expect(reaped).toBe(0);
     });
 
-    it("should emit mcp:agent_disconnected for each reaped session", async () => {
-      const bus = getEventBus();
-      await connect("ghost", "g1");
-      vi.clearAllMocks();
-      reapStaleSessions(0, Date.now() + 1);
-      expect(bus.emit).toHaveBeenCalledWith(
-        "mcp:agent_disconnected",
-        expect.objectContaining({ agentId: "ghost", sessionId: "g1" }),
-      );
+    it("should emit mcp:agent_disconnected for each reaped session after the debounce window", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("ghost", "g1");
+        vi.clearAllMocks();
+        reapStaleSessions(0, Date.now() + 1);
+        // Reaped-and-gone still surfaces — after the window, like every path.
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS + 1);
+        expect(bus.emit).toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.objectContaining({ agentId: "ghost", sessionId: "g1" }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // ==========================================================================
+  // adj-vnl3r: agent_disconnected debounce.
+  //
+  // Every mcp:agent_disconnected wakes the coordinator as CRITICAL
+  // (signal-aggregator). Backend restarts and client reconnects made every
+  // transport close look like an agent death — hundreds of false-critical
+  // wakes. Contract: a disconnect only surfaces if the agent does NOT
+  // reconnect within DISCONNECT_DEBOUNCE_MS; a reconnect inside the window
+  // cancels the pending event entirely. mcp:agent_connected stays immediate.
+  // ==========================================================================
+  describe("agent_disconnected debounce (adj-vnl3r)", () => {
+    async function connect(agentId: string, sessionId: string) {
+      await createSessionTransport(agentId);
+      const t = createdTransports[createdTransports.length - 1]!;
+      t.sessionId = sessionId;
+      t._onsessioninitialized!(sessionId);
+      return t;
+    }
+
+    it("should suppress agent_disconnected entirely when the agent reconnects within the window", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("phoenix", "p1");
+        vi.clearAllMocks();
+
+        disconnectAgent("p1");
+        // Reconnect inside the window (e.g. after a backend restart or client
+        // transport re-establishment).
+        vi.advanceTimersByTime(1_000);
+        await connect("phoenix", "p2");
+
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS * 2);
+
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("should still emit mcp:agent_connected immediately on reconnect", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("phoenix", "p1");
+        disconnectAgent("p1");
+        vi.clearAllMocks();
+
+        await connect("phoenix", "p2");
+
+        // No timer advance needed — presence recovery is instant.
+        expect(bus.emit).toHaveBeenCalledWith(
+          "mcp:agent_connected",
+          expect.objectContaining({ agentId: "phoenix", sessionId: "p2" }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("should emit zero disconnect events across rapid close/reconnect churn cycles", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("churny", "c0");
+        vi.clearAllMocks();
+
+        // Five churn cycles well inside the window each time — the restart storm.
+        for (let i = 1; i <= 5; i++) {
+          disconnectAgent(`c${i - 1}`);
+          vi.advanceTimersByTime(500);
+          await connect("churny", `c${i}`);
+        }
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS * 2);
+
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("should not suppress a different agent's pending disconnect on reconnect", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("dying", "d1");
+        await connect("healthy", "h1");
+        vi.clearAllMocks();
+
+        disconnectAgent("d1");
+        // A DIFFERENT agent reconnecting must not cancel dying's pending event.
+        disconnectAgent("h1");
+        vi.advanceTimersByTime(1_000);
+        await connect("healthy", "h2");
+
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS + 1);
+
+        expect(bus.emit).toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.objectContaining({ agentId: "dying", sessionId: "d1" }),
+        );
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.objectContaining({ agentId: "healthy" }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("should not emit at fire time if the agent has a live connection (belt and braces)", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        // Two concurrent sessions for one agent id can exist transiently for
+        // placeholder ids; the fire-time liveness re-check must keep a live
+        // agent from being reported dead even if cancel-on-connect was missed.
+        await connect("unknown-agent-x1", "ux1");
+        vi.clearAllMocks();
+
+        // Schedule a disconnect for a session, then hand-register a live one
+        // via the normal connect path before the timer fires.
+        disconnectAgent("ux1");
+        await connect("unknown-agent-x1", "ux2");
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS * 2);
+
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("should clear pending disconnect timers on resetMcpServer", async () => {
+      vi.useFakeTimers();
+      try {
+        const bus = getEventBus();
+        await connect("resetter", "r1");
+        disconnectAgent("r1");
+        vi.clearAllMocks();
+
+        resetMcpServer();
+        vi.advanceTimersByTime(DISCONNECT_DEBOUNCE_MS * 2);
+
+        expect(bus.emit).not.toHaveBeenCalledWith(
+          "mcp:agent_disconnected",
+          expect.anything(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
