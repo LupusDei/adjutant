@@ -20,15 +20,13 @@ import { z } from "zod";
 
 import { getAgentBySession } from "../mcp-server.js";
 import type { ArtifactStore } from "../artifact-store.js";
+import { MAX_HTML_CHARS } from "../../types/artifacts.js";
 import { logInfo } from "../../utils/index.js";
 
-/**
- * Maximum size (in characters) of an agent-authored self-contained `html` body. 256 KiB —
- * mirrors the adj-200 proposal cap. Enforced at the Zod boundary so an oversized document is
- * rejected before it reaches the store. Measured in UTF-16 code units (string length), a
- * close proxy for bytes for the predominantly-ASCII HTML agents produce.
- */
-const MAX_HTML_CHARS = 256 * 1024;
+// MAX_HTML_CHARS (256 KiB) is the SINGLE shared cap constant, exported from
+// types/artifacts.ts so the REST schemas (CreateArtifactSchema/UpdateArtifactSchema)
+// and this MCP tool enforce the exact same limit (adj-j7az6.5.7). Measured in UTF-16
+// code units (string length), a close proxy for bytes for predominantly-ASCII HTML.
 
 /**
  * Agent-facing authoring contract for the self-contained artifact `html` body, surfaced

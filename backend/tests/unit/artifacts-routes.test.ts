@@ -38,7 +38,9 @@ describe("artifacts-routes", () => {
     const store = createArtifactStore(db);
 
     app = express();
-    app.use(express.json());
+    // Mirror the production body limit (src/index.ts: express.json({ limit: "1mb" }))
+    // so oversized bodies reach the Zod cap boundary rather than express's default 100kb.
+    app.use(express.json({ limit: "1mb" }));
     app.use("/api/artifacts", createArtifactsRouter(store));
   });
 
@@ -68,6 +70,47 @@ describe("artifacts-routes", () => {
 
     it("should reject a missing html with 400", async () => {
       const res = await request(app).post("/api/artifacts").send({ title: "No body" });
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    // adj-j7az6.5.7 — size caps at the UNAUTHENTICATED-compute boundary. The /a/:token
+    // route sanitizes each html body per request, so an unbounded blob is a
+    // compute-amplification DoS. The REST schema must cap html/title/description/slug
+    // exactly like the MCP create_artifact tool (shared MAX_* constants).
+    it("should reject html over the 256 KiB cap with 400", async () => {
+      const oversized = "a".repeat(256 * 1024 + 1);
+      const res = await request(app).post("/api/artifacts").send({ title: "T", html: oversized });
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("should accept html exactly at the 256 KiB cap", async () => {
+      const atCap = "a".repeat(256 * 1024);
+      const res = await request(app).post("/api/artifacts").send({ title: "T", html: atCap });
+      expect(res.status).toBe(201);
+    });
+
+    it("should reject a title over the cap with 400", async () => {
+      const res = await request(app)
+        .post("/api/artifacts")
+        .send({ title: "x".repeat(301), html: "<p>x</p>" });
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("should reject a description over the cap with 400", async () => {
+      const res = await request(app)
+        .post("/api/artifacts")
+        .send({ title: "T", html: "<p>x</p>", description: "d".repeat(2001) });
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("should reject a slug over the cap with 400", async () => {
+      const res = await request(app)
+        .post("/api/artifacts")
+        .send({ title: "T", html: "<p>x</p>", slug: "s".repeat(201) });
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
     });
@@ -121,6 +164,14 @@ describe("artifacts-routes", () => {
     it("should 400 for an empty update body", async () => {
       const id = await createArtifactViaApi({ title: "T", html: "<p>t</p>" });
       const res = await request(app).patch(`/api/artifacts/${id}`).send({});
+      expect(res.status).toBe(400);
+    });
+
+    // adj-j7az6.5.7 — the update path shares the same size caps as create.
+    it("should 400 when updating html over the 256 KiB cap", async () => {
+      const id = await createArtifactViaApi({ title: "T", html: "<p>t</p>" });
+      const oversized = "a".repeat(256 * 1024 + 1);
+      const res = await request(app).patch(`/api/artifacts/${id}`).send({ html: oversized });
       expect(res.status).toBe(400);
     });
   });
@@ -200,6 +251,18 @@ describe("artifacts-routes", () => {
     it("should 404 for an unknown id", async () => {
       const res = await request(app).get("/api/artifacts/nope/download");
       expect(res.status).toBe(404);
+    });
+
+    // adj-j7az6.5.3 — cross-client filename parity. When neither slug nor a
+    // sluggable title yields a name, the fallback MUST be `artifact-<id>.html` to
+    // match the iOS (artifactDownloadFilename) and web (api.artifacts.download)
+    // clients and the documented contract — NOT a bare `<id>.html`.
+    it("should fall back to artifact-<id>.html when the title has no sluggable chars", async () => {
+      const id = await createArtifactViaApi({ title: "!!!", html: "<p>x</p>" });
+      const res = await request(app).get(`/api/artifacts/${id}/download`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers["content-disposition"]).toContain(`artifact-${id}.html`);
     });
   });
 });
