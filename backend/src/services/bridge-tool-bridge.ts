@@ -31,6 +31,8 @@ import { getProject, listProjects, type Project } from "./projects-service.js";
 import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { buildAutoDevelopStatus } from "./auto-develop-status.js";
 import { resolveAgentName } from "./bridge-agent-resolver.js";
+import type { EventStore } from "./event-store.js";
+import type { TimelineEvent } from "../types/events.js";
 import type { MessageStore } from "./message-store.js";
 import type { ProposalStore } from "./proposal-store.js";
 import type { AutoDevelopStore } from "./auto-develop-store.js";
@@ -52,6 +54,7 @@ export const BRIDGE_READONLY_TOOLS = [
   "read_messages",
   "query_memories",
   "list_projects",
+  "list_timeline",
 ] as const;
 
 export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
@@ -76,6 +79,9 @@ export interface BridgeToolDeps {
   // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections across
   // sessions by querying the SAME memory store the MCP query_memories tool reads.
   memoryStore: Pick<MemoryStore, "searchLearnings" | "queryLearnings">;
+  // adj-ni4dh — recent fleet activity: the avatar reads the SAME timeline the Timeline
+  // tab renders (eventStore.getEvents) to summarize what's been happening across the fleet.
+  eventStore: Pick<EventStore, "getEvents">;
 }
 
 export interface BridgeToolRequest {
@@ -176,6 +182,18 @@ const queryMemoriesArgs = z.object({
   topic: z.string().min(1).optional(),
   minConfidence: z.number().min(0).max(1).optional(),
   limit: z.number().int().positive().optional(),
+});
+
+// list_timeline — recent fleet activity. Sized to stay well under the LiveKit RPC ~15KB
+// payload ceiling: 50 compact events (eventType/agentId/action/beadId/time, action clipped)
+// ≈ 8KB. The Commander asks for "the last 50", so 50 is the default AND the cap here.
+const LIST_TIMELINE_DEFAULT_LIMIT = 50;
+const LIST_TIMELINE_MAX_LIMIT = 50;
+const TIMELINE_ACTION_MAX = 160;
+
+const listTimelineArgs = z.object({
+  limit: z.number().int().positive().optional(),
+  agentId: z.string().min(1).optional(),
 });
 
 // ============================================================================
@@ -280,6 +298,8 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
           return runQueryMemories(deps, args, projectId);
         case "list_projects":
           return runListProjects(projectId);
+        case "list_timeline":
+          return runListTimeline(deps, args, projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
           return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
@@ -314,6 +334,7 @@ const TOOL_GET_AUTO_DEVELOP_STATUS: BridgeToolName = "get_auto_develop_status";
 const TOOL_READ_MESSAGES: BridgeToolName = "read_messages";
 const TOOL_QUERY_MEMORIES: BridgeToolName = "query_memories";
 const TOOL_LIST_PROJECTS: BridgeToolName = "list_projects";
+const TOOL_LIST_TIMELINE: BridgeToolName = "list_timeline";
 
 /**
  * list_projects — the fleet-wide project roster (name + id) so the avatar can NAME which projects
@@ -327,6 +348,38 @@ function runListProjects(projectId: string | null): BridgeToolResult {
   }
   const projects = result.data.map((p) => ({ name: p.name, id: p.id }));
   return ok(TOOL_LIST_PROJECTS, projectId, { projects, count: projects.length });
+}
+
+/**
+ * list_timeline — the fleet's recent activity feed (the SAME events the Timeline tab shows).
+ * Returns the most recent events (default/cap 50), newest first, so the avatar can recap
+ * "what's been happening" across the fleet. Compact projection (type/agent/action/beadId/time,
+ * action clipped) keeps the payload well under the LiveKit RPC ceiling. Optionally scoped to
+ * one agent. This is fleet-wide: recent activity spans every project, not just the session's.
+ */
+function runListTimeline(
+  deps: BridgeToolDeps,
+  args: Record<string, unknown>,
+  projectId: string | null,
+): BridgeToolResult {
+  const parsed = listTimelineArgs.safeParse(args);
+  if (!parsed.success) {
+    return reject(TOOL_LIST_TIMELINE, projectId, "INVALID_ARGS", parsed.error.issues.map((i) => i.message).join("; "));
+  }
+  const limit = Math.min(parsed.data.limit ?? LIST_TIMELINE_DEFAULT_LIMIT, LIST_TIMELINE_MAX_LIMIT);
+  const query: Partial<Pick<TimelineEvent, "agentId">> & { limit: number } = { limit };
+  if (parsed.data.agentId) query.agentId = parsed.data.agentId;
+
+  const events = deps.eventStore.getEvents(query);
+  const compact = events.map((e: TimelineEvent) => ({
+    time: e.createdAt,
+    type: e.eventType,
+    agent: e.agentId,
+    action:
+      e.action.length > TIMELINE_ACTION_MAX ? `${e.action.slice(0, TIMELINE_ACTION_MAX)}…` : e.action,
+    beadId: e.beadId,
+  }));
+  return ok(TOOL_LIST_TIMELINE, projectId, { events: compact, count: compact.length });
 }
 
 async function runListAgents(

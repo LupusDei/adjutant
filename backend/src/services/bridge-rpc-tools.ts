@@ -129,6 +129,17 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
   },
   {
     type: "backend_rpc",
+    name: "list_timeline",
+    description:
+      "The fleet's RECENT ACTIVITY feed — the most recent events across ALL projects (status changes, progress reports, announcements, beads updated/closed, coordinator actions, proposals completed, personas created, deploys), newest first. Call this whenever the Commander asks what's been happening, for a recap / catch-me-up / status update / recent activity, or 'what did the fleet do'. Pair it with list_agents for who's active, then synthesize a brief spoken summary. Returns up to the last 50 events (the default). Optionally pass agentId to focus one agent's recent activity.",
+    parameters: [
+      { name: "limit", type: "number", description: "Optional number of recent events to read (default 50, capped at 50)." },
+      { name: "agentId", type: "string", description: "Optional agent NAME to focus recent activity on just that agent (e.g. \"fenix\")." },
+    ],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
     name: "read_messages",
     description:
       "Read recent agent/user messages to RECALL what was said earlier. You NEVER need a conversation id or any other id — to read a specific agent's thread just pass that agent's NAME in agentId (e.g. \"fenix\"); to read fleet-wide recent traffic, omit everything. The lookup resolves the conversation for you. The structured result is the source of truth.",
@@ -288,6 +299,9 @@ You can query live fleet state using these read-only tools. CALL the matching to
 CROSS-PROJECT RULE: you coordinate the WHOLE fleet. When the Commander names a project, look it up by NAME — never say you can only see one project, and never ask for a project id.
 - read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread; otherwise it reads recent fleet-wide. The structured result is the source of truth.
 - query_memories — RECALL what you've LEARNED across sessions: the Commander's stated preferences, past decisions, recorded corrections, and fleet patterns. The structured result is the source of truth.
+- list_timeline — the fleet's RECENT ACTIVITY feed (the last ~50 events across all projects: status changes, progress, announcements, beads updated/closed, coordinator actions, proposals completed, deploys). This is your best source for "what's been happening lately." The structured result is the source of truth.
+
+RECENT-ACTIVITY DOCTRINE — when the Commander asks for a recap, a status update, "what's been happening", "catch me up", or recent activity across the fleet: call list_timeline (the last ~50 events) AND list_agents, then SYNTHESIZE — do not read the log line by line. Give a brief spoken summary that leads with what just COMPLETED (beads closed, proposals completed, deploys) and what's IN PROGRESS, groups related events by agent or project, and flags anything needing attention (blockers, open questions, failures). Name the agents and projects involved. Prefer 3-6 crisp sentences over an exhaustive list; the timeline is the evidence, your summary is the value. If the Commander asks about one agent, pass agentId to focus the feed. Ground every claim in the returned events — never invent activity.
 
 After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded. An agent can be idle (no live session) yet still own in-progress work — so if list_agents shows no "active" agents, that does NOT mean nobody has work; call get_agent_detail for whoever the Commander asks about to report their assigned beads.
 

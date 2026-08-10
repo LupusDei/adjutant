@@ -301,6 +301,32 @@ export interface Proposal {
   publishedAt?: string;
 }
 
+/**
+ * A global/personal Artifact (adj-j7az6) — a self-contained, standalone HTML
+ * page decoupled from proposals and beads. One fleet-wide library owned by the
+ * Commander; there is NO project scoping. Mirrors the backend `Artifact` shape.
+ */
+export interface Artifact {
+  id: string;
+  title: string;
+  /** Optional URL/download-friendly slug (drives the download filename). */
+  slug?: string;
+  /** Optional summary. */
+  description?: string;
+  /** Self-contained HTML body (authored source; sanitized at compose time). */
+  html: string;
+  /** Whether this artifact is published (reachable via the public /a/:token route). */
+  isPublic: boolean;
+  /** Unguessable public handle; present once the artifact has been published. */
+  shareToken?: string;
+  /** ISO timestamp of the most recent publish. */
+  publishedAt?: string;
+  /** Agent id or user who authored the artifact; absent if unknown. */
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SessionInfo {
   id: string;
   name: string;

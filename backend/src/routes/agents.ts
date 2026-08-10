@@ -70,6 +70,38 @@ agentsRouter.get("/", async (_req, res) => {
 });
 
 /**
+ * GET /api/agents/:agentId/persona-prompt
+ *
+ * Returns the rendered persona prompt for the agent's linked persona, resolved by
+ * callsign — the seam the persona-inject SessionStart hook curls to re-inject persona
+ * context after compaction (adj-j0jpz), and the probe `adjutant doctor` uses to verify a
+ * project is persona-wired. Keyed on the agent callsign (ADJUTANT_AGENT_ID), which is
+ * always set in a spawned session — no dependency on ADJUTANT_PERSONA_ID propagating.
+ *
+ * 200 { prompt, personaId, personaName } — agent has a linked persona.
+ * 404 — no persona linked to this callsign (a legitimate "generic agent" state; the hook
+ *       stays silent on 404 and only warns LOUD on a 5xx/unreachable while a persona is
+ *       expected, so a real regression is never swallowed).
+ */
+agentsRouter.get("/:agentId/persona-prompt", (req, res) => {
+  const personaService = getPersonaService();
+  if (!personaService) {
+    return res.status(500).json(internalError("Persona service unavailable"));
+  }
+  const persona = personaService.getPersonaByCallsign(req.params.agentId);
+  if (!persona) {
+    return res.status(404).json(notFound("Persona for agent", req.params.agentId));
+  }
+  try {
+    const prompt = generatePersonaPrompt(persona);
+    return res.json(success({ prompt, personaId: persona.id, personaName: persona.name }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to generate persona prompt";
+    return res.status(500).json(internalError(message));
+  }
+});
+
+/**
  * Request body schema for spawn agent endpoint.
  * Accepts either projectPath (absolute) or projectId (resolved via registry).
  * Optional personaId to spawn with a specific persona.
@@ -239,6 +271,15 @@ agentsRouter.post("/spawn", async (req, res) => {
     initialPrompt = `${constitutionPrompt}\n\n---\n\n${initialPrompt}`;
   } else if (constitutionPrompt) {
     initialPrompt = constitutionPrompt;
+  }
+
+  // adj-j0jpz: inject the persona prompt into the turn-1 context too, not just via the
+  // --agent file — a prompt injection is project-agnostic and doesn't depend on the agent
+  // file resolving in the spawned session's cwd. Order: constitution → persona → task.
+  if (personaPrompt) {
+    initialPrompt = initialPrompt
+      ? `${initialPrompt}\n\n---\n\n${personaPrompt}`
+      : personaPrompt;
   }
 
   const result = await bridge.createSession({

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createArtifactsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicArtifactsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
@@ -28,9 +28,11 @@ import { createAgentStatusStore } from "./services/agent-status-store.js";
 import { registerBeadTools } from "./services/mcp-tools/beads.js";
 import { registerQueryTools } from "./services/mcp-tools/queries.js";
 import { registerProposalTools } from "./services/mcp-tools/proposals.js";
+import { registerArtifactTools } from "./services/mcp-tools/artifacts.js";
 import { registerQuestionTools } from "./services/mcp-tools/questions.js";
 import { registerAutoDevelopTools } from "./services/mcp-tools/auto-develop.js";
 import { createProposalStore, migrateProposalProjectNames } from "./services/proposal-store.js";
+import { createArtifactStore } from "./services/artifact-store.js";
 import { backfillConversations } from "./services/conversation-backfill.js";
 import { createConversationStore } from "./services/conversation-store.js";
 import { createConversationsRouter } from "./routes/conversations.js";
@@ -111,6 +113,8 @@ const uploadStorage = createUploadStorage();
 uploadStorage.ensureDir();
 const uploadService = createUploadService({ storage: uploadStorage, attachmentStore });
 const proposalStore = createProposalStore(messageDb);
+// adj-j7az6 — global/personal Artifacts store (no project scoping). Shares the message DB.
+const artifactStore = createArtifactStore(messageDb);
 const conversationStore = createConversationStore(messageDb, messageStore);
 migrateProposalProjectNames(messageDb);
 // adj-164.1.4 — backfill legacy messages into DM conversations. Idempotent:
@@ -163,6 +167,9 @@ app.use((req, res, next) => {
 // Public, unauthenticated proposal pages (adj-200). MUST be mounted BEFORE apiKeyAuth
 // so a shareable /p/:token link works in any browser with no API key.
 app.use("/p", createPublicProposalsRouter(proposalStore));
+// adj-j7az6 — Public, unauthenticated Artifact pages. Same fail-closed no-existence-leak
+// contract as /p; mounted BEFORE apiKeyAuth so a shareable /a/:token link works with no key.
+app.use("/a", createPublicArtifactsRouter(artifactStore));
 
 // adj-181.3 / adj-181.2 — question triage service. Constructed here (BEFORE the /avatar
 // mount) because the read-only Bridge tool bridge depends on it, and the iOS/default
@@ -243,6 +250,9 @@ const bridgeToolBridge = createBridgeToolBridge({
   // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections via the
   // SAME memory store the MCP query_memories tool and the rest of the system read.
   memoryStore,
+  // adj-ni4dh — recent fleet activity: the avatar reads the SAME timeline the Timeline
+  // tab renders so it can summarize what's been happening across the fleet.
+  eventStore,
 });
 // Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
 // spoken status question resolves to real fleet data instead of stalling on "querying…".
@@ -406,6 +416,9 @@ app.use("/api/channels", createChannelsRouter(conversationStore));
 app.use("/api/projects", createProjectsRouter(messageStore, proposalStore, autoDevelopStore));
 app.use("/api/overview", createOverviewRouter(messageStore, coordinationOverviewService));
 app.use("/api/proposals", createProposalsRouter(proposalStore));
+// adj-j7az6 — Artifacts REST API (authed owner surface). Public /a/:token is mounted
+// BEFORE apiKeyAuth (beside /p).
+app.use("/api/artifacts", createArtifactsRouter(artifactStore));
 
 // adj-181.3 — agent question triage REST API (service constructed above the /avatar mount).
 app.use("/api/questions", createQuestionsRouter(questionService));
@@ -666,6 +679,7 @@ const server = app.listen(PORT_NUMBER, BIND_HOST, () => {
     registerBeadTools(server, eventStore, proposalStore, messageDb);
     registerQueryTools(server, messageStore);
     registerProposalTools(server, proposalStore);
+    registerArtifactTools(server, artifactStore);
     registerAutoDevelopTools(server, proposalStore, autoDevelopStore, { adjutantState, stimulusEngine });
     registerMemoryTools(server, memoryStore, { getAgentBySession });
     registerCoordinationTools(server, adjutantState, messageStore, stimulusEngine, eventStore, cronScheduleStore);

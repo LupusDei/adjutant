@@ -24,8 +24,9 @@ const PUBLIC_PATHS = ["/health"];
  *         listed here as defense in depth against future mount-order changes. The
  *         trailing slash keeps this from matching unrelated `/p…` routes (e.g. future
  *         /ping, /preview) — only the `/p/:token` page bypasses auth.
+ * - /a/:  public, shareable Artifact pages (adj-j7az6) — same no-API-key contract as /p/.
  */
-const PUBLIC_PREFIXES = ["/mcp", "/p/", "/avatar"];
+const PUBLIC_PREFIXES = ["/mcp", "/p/", "/a/", "/avatar"];
 
 /**
  * Extract bearer token from Authorization header.

@@ -10,7 +10,7 @@
 import { execFile } from "child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir, userInfo } from "os";
-import { dirname, join } from "path";
+import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
 
@@ -24,6 +24,7 @@ import {
   getGlobalAdjutantDir,
 } from "../lib/checks.js";
 import { installPlugin } from "../lib/plugin.js";
+import { installPersonaInjectHook } from "../lib/persona-inject.js";
 import { QUALITY_FILES, loadTemplate } from "../lib/quality-templates.js";
 import { printHeader, printCheck, printSummary, printSuccess, printError, type CheckResult } from "../lib/output.js";
 import { PRIME_MD_CONTENT } from "../lib/prime.js";
@@ -404,6 +405,159 @@ export async function runRealInitDoltSupervisor(projectRoot: string): Promise<Ch
   });
 }
 
+// ── registerProject() — register the repo with the backend on init (adj-125) ──
+//
+// Before this, `adjutant init` only wrote local files and NEVER told the backend the
+// project exists, so a freshly-init'd repo was invisible to the dashboard, agents, and
+// MCP routing while init still reported success — a silent skip the Commander noticed
+// before we did. This posts { path, name } to the backend's POST /api/projects (the same
+// endpoint the manual `curl` workaround used), reading the backend origin from the very
+// `.mcp.json` init just wrote (NOT hardcoded, so a customized port is honored).
+//
+// Contract:
+//  - 201 → registered (created).
+//  - 409 → already registered → treated as SUCCESS (idempotent re-init).
+//  - any other status → fail (something is actually wrong).
+//  - backend unreachable → WARN LOUDLY naming the exact manual curl — never a silent
+//    skip. Exit stays 0: running `adjutant init` before starting the backend is a
+//    legitimate ordering, and a hook/automation shouldn't hard-break on a down backend.
+//    The loud warning (not the exit code) is what kills the original failure mode.
+//
+// External effects (the HTTP POST) are an injected seam so this is trivially testable.
+
+/** POST a JSON body; resolves with the response status + parsed body, or throws on a
+ *  network error (mirrors `fetch` semantics — a throw means "backend unreachable"). */
+export type PostJsonFn = (
+  url: string,
+  body: unknown,
+) => Promise<{ status: number; body: unknown }>;
+
+export interface RegisterProjectDeps {
+  /** Backend origin, e.g. "http://localhost:4201" (parsed from .mcp.json). */
+  backendOrigin: string;
+  /** Display name to register (defaults to the repo dir basename). */
+  projectName: string;
+  /** HTTP POST seam. */
+  postJson: PostJsonFn;
+}
+
+/** Pull the new project id from either the ApiResponse envelope (`data.id`) or a raw `id`. */
+function extractProjectId(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const b = body as { id?: unknown; data?: { id?: unknown } };
+  const raw = b.data?.id ?? b.id;
+  return raw === undefined || raw === null ? undefined : String(raw);
+}
+
+/** The manual fallback command, surfaced verbatim whenever auto-registration doesn't land. */
+function manualRegisterHint(url: string, projectRoot: string, name: string): string {
+  return (
+    `register manually once the backend is up:\n` +
+    `    curl -X POST ${url} -H 'Content-Type: application/json' ` +
+    `-d '{"path":"${projectRoot}","name":"${name}"}'`
+  );
+}
+
+/**
+ * Register `projectRoot` with the backend. Pure orchestration over the injected
+ * {@link RegisterProjectDeps.postJson} seam; returns a single {@link CheckResult}.
+ */
+export async function registerProject(
+  projectRoot: string,
+  deps: RegisterProjectDeps,
+): Promise<CheckResult> {
+  const url = `${deps.backendOrigin.replace(/\/$/, "")}/api/projects`;
+  try {
+    const res = await deps.postJson(url, { path: projectRoot, name: deps.projectName });
+    if (res.status === 201) {
+      // The endpoint returns the standard ApiResponse envelope `{ data: { id, ... } }`;
+      // tolerate a raw `{ id }` too so this doesn't break if the shape is ever flattened.
+      const id = extractProjectId(res.body);
+      return {
+        name: "Project registration",
+        status: "created",
+        message: `registered '${deps.projectName}'${id ? ` (${id})` : ""}`,
+      };
+    }
+    if (res.status === 409) {
+      return {
+        name: "Project registration",
+        status: "skipped",
+        message: `'${deps.projectName}' already registered`,
+      };
+    }
+    return {
+      name: "Project registration",
+      status: "fail",
+      message: `backend ${url} returned ${res.status} — ${manualRegisterHint(url, projectRoot, deps.projectName)}`,
+    };
+  } catch {
+    // Network error — backend not running. LOUD warn (never a silent skip), exit unaffected.
+    return {
+      name: "Project registration",
+      status: "warn",
+      message: `backend not reachable at ${deps.backendOrigin} — '${deps.projectName}' NOT registered; ${manualRegisterHint(url, projectRoot, deps.projectName)}`,
+    };
+  }
+}
+
+/** Extract the backend origin (scheme://host:port) from the project's .mcp.json. */
+export function backendOriginFromMcpJson(projectRoot: string): string | null {
+  const parsed = parseJsonFile<Record<string, unknown>>(join(projectRoot, ".mcp.json"));
+  const servers = parsed?.mcpServers as Record<string, unknown> | undefined;
+  const adjutant = servers?.adjutant as { url?: unknown } | undefined;
+  if (!adjutant || typeof adjutant.url !== "string") return null;
+  try {
+    return new URL(adjutant.url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Real POST seam over global fetch, with a timeout so init never hangs on a wedged backend. */
+async function realPostJson(url: string, body: unknown): Promise<{ status: number; body: unknown }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    let parsed: unknown = null;
+    try {
+      parsed = await res.json();
+    } catch {
+      /* non-JSON body is fine; status is what we key on */
+    }
+    return { status: res.status, body: parsed };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Build production {@link RegisterProjectDeps} and register `projectRoot`. Returns a
+ * `warn` CheckResult (never null) when the backend origin can't be read from .mcp.json,
+ * so a missing/garbled config still surfaces loudly rather than silently skipping.
+ */
+export async function runRealRegisterProject(projectRoot: string): Promise<CheckResult> {
+  const backendOrigin = backendOriginFromMcpJson(projectRoot);
+  if (!backendOrigin) {
+    return {
+      name: "Project registration",
+      status: "warn",
+      message: "could not determine backend URL from .mcp.json — project NOT registered",
+    };
+  }
+  return registerProject(projectRoot, {
+    backendOrigin,
+    projectName: basename(projectRoot),
+    postJson: realPostJson,
+  });
+}
+
 export async function runInit(options: InitOptions): Promise<number> {
   printHeader("Adjutant Init");
   const projectRoot = process.cwd();
@@ -425,6 +579,11 @@ export async function runInit(options: InitOptions): Promise<number> {
   const pkg = JSON.parse(readFileSync(join(adjutantRoot, "package.json"), "utf-8"));
   results.push(...installPlugin(adjutantRoot, pkg.version));
 
+  // adj-j0jpz: make the project persona-ready — copy the persona-inject hook script in and
+  // register it under the "" and "compact" SessionStart matchers so a spawned agent's
+  // persona is re-injected after compaction, even outside the adjutant repo. Idempotent.
+  results.push(installPersonaInjectHook(projectRoot, adjutantRoot));
+
   // Adjutant-project-specific checks (only when running inside the adjutant repo)
   const isAdjutantProject = fileExists(join(projectRoot, "package.json")) &&
     JSON.parse(readFileSync(join(projectRoot, "package.json"), "utf-8")).name === "adjutant";
@@ -444,10 +603,23 @@ export async function runInit(options: InitOptions): Promise<number> {
     results.push(doltSupervisor);
   }
 
+  // adj-125: register the project with the backend so a freshly-init'd repo appears in
+  // the dashboard / agents / MCP routing without a manual step. Runs after .mcp.json is
+  // written (it sources the backend origin from there). A down backend WARNS loudly.
+  const registration = await runRealRegisterProject(projectRoot);
+  results.push(registration);
+
   for (const r of results) {
     printCheck(r);
   }
   printSummary(results);
+
+  // Make a non-registration LOUD: the original bug (adj-125) was that init reported
+  // success while silently skipping registration, so the Commander had no signal. A
+  // warn/fail here gets an explicit, unmissable banner naming the manual fallback.
+  if (registration.status === "warn" || registration.status === "fail") {
+    printError(`\n⚠ Project NOT registered with the backend.\n  ${registration.message}`);
+  }
 
   const hasFail = results.some((r) => r.status === "fail");
   if (hasFail) {

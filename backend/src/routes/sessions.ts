@@ -195,6 +195,10 @@ sessionsRouter.post("/", async (req, res) => {
     envVars["ADJUTANT_PERSONA_ID"] = persona.id;
   }
 
+  // adj-j0jpz: inject the persona prompt into the turn-1 context so the persona lands even
+  // if the --agent file doesn't resolve in the session cwd — the project-agnostic path.
+  const initialPrompt = personaPrompt && persona ? personaPrompt : undefined;
+
   // Write persona prompt as .claude/agents/<name>.md and pass --agent flag
   // instead of injecting via paste-buffer (FR-001, FR-002, FR-005).
   const result = await bridge.createSession({
@@ -204,6 +208,7 @@ sessionsRouter.post("/", async (req, res) => {
     workspaceType: data.workspaceType ?? "primary",
     claudeArgs: claudeArgs.length > 0 ? claudeArgs : undefined,
     envVars: Object.keys(envVars).length > 0 ? envVars : undefined,
+    ...(initialPrompt ? { initialPrompt } : {}),
   });
 
   if (!result.success) {

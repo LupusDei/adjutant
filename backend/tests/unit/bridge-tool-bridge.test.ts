@@ -140,6 +140,9 @@ function makeDeps(overrides: Partial<BridgeToolDeps> = {}): BridgeToolDeps {
       searchLearnings: vi.fn().mockReturnValue([]),
       queryLearnings: vi.fn().mockReturnValue([]),
     } as unknown as BridgeToolDeps["memoryStore"],
+    eventStore: {
+      getEvents: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["eventStore"],
     ...overrides,
   };
 }
@@ -157,7 +160,7 @@ beforeEach(() => {
 // ============================================================================
 
 describe("createBridgeToolBridge — whitelist", () => {
-  it("exposes exactly the nine read-only tools", () => {
+  it("exposes exactly the ten read-only tools", () => {
     expect([...BRIDGE_READONLY_TOOLS].sort()).toEqual(
       [
         "get_agent_detail",
@@ -167,6 +170,7 @@ describe("createBridgeToolBridge — whitelist", () => {
         "list_beads",
         "list_projects",
         "list_questions",
+        "list_timeline",
         "read_messages",
         "query_memories",
       ].sort(),
@@ -942,5 +946,75 @@ describe("query_memories", () => {
       expect(data.memories).toEqual([]);
       expect(data.count).toBe(0);
     }
+  });
+});
+
+// ============================================================================
+// list_timeline (adj-ni4dh) — recent fleet-activity feed for spoken summaries
+// ============================================================================
+
+describe("list_timeline", () => {
+  const EVENTS = [
+    { id: "e1", eventType: "bead_closed", agentId: "fenix", action: "Closed adj-202.6", detail: null, beadId: "adj-202.6", messageId: null, createdAt: "2026-08-09T17:00:00Z" },
+    { id: "e2", eventType: "status_change", agentId: "raynor", action: "working", detail: null, beadId: null, messageId: null, createdAt: "2026-08-09T16:59:00Z" },
+  ];
+
+  it("returns the recent events in a compact projection", async () => {
+    const eventStore = { getEvents: vi.fn().mockReturnValue(EVENTS) } as unknown as BridgeToolDeps["eventStore"];
+    const bridge = createBridgeToolBridge(makeDeps({ eventStore }));
+    const res = await bridge.executeTool({ tool: "list_timeline", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { events: Record<string, unknown>[]; count: number };
+      expect(data.count).toBe(2);
+      expect(data.events[0]).toEqual({
+        time: "2026-08-09T17:00:00Z",
+        type: "bead_closed",
+        agent: "fenix",
+        action: "Closed adj-202.6",
+        beadId: "adj-202.6",
+      });
+    }
+  });
+
+  it("defaults to the last 50 and caps the limit at 50", async () => {
+    const getEvents = vi.fn().mockReturnValue([]);
+    const bridge = createBridgeToolBridge(makeDeps({ eventStore: { getEvents } as unknown as BridgeToolDeps["eventStore"] }));
+
+    await bridge.executeTool({ tool: "list_timeline", args: {} });
+    expect(getEvents).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50 }));
+
+    await bridge.executeTool({ tool: "list_timeline", args: { limit: 999 } });
+    expect(getEvents).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50 }));
+  });
+
+  it("focuses one agent's activity when agentId is passed", async () => {
+    const getEvents = vi.fn().mockReturnValue([]);
+    const bridge = createBridgeToolBridge(makeDeps({ eventStore: { getEvents } as unknown as BridgeToolDeps["eventStore"] }));
+
+    await bridge.executeTool({ tool: "list_timeline", args: { agentId: "fenix" } });
+    expect(getEvents).toHaveBeenCalledWith(expect.objectContaining({ agentId: "fenix", limit: 50 }));
+  });
+
+  it("clips an over-long action so the payload stays under the RPC ceiling", async () => {
+    const longAction = "x".repeat(500);
+    const eventStore = {
+      getEvents: vi.fn().mockReturnValue([{ id: "e", eventType: "announcement", agentId: "a", action: longAction, detail: null, beadId: null, messageId: null, createdAt: "t" }]),
+    } as unknown as BridgeToolDeps["eventStore"];
+    const bridge = createBridgeToolBridge(makeDeps({ eventStore }));
+    const res = await bridge.executeTool({ tool: "list_timeline", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { events: { action: string }[] };
+      expect(data.events[0].action.length).toBeLessThan(longAction.length);
+      expect(data.events[0].action.endsWith("…")).toBe(true);
+    }
+  });
+
+  it("is on the whitelist (isAllowed)", () => {
+    const bridge = createBridgeToolBridge(makeDeps());
+    expect(bridge.isAllowed("list_timeline")).toBe(true);
   });
 });

@@ -6,11 +6,16 @@
  * - adj-033.4.2: SessionStart hook with compact matcher (re-injection after compaction)
  * - adj-033.4.3: SessionStart hook for initial persona context injection
  *
- * The hook script is a bash script that:
- * 1. Reads ADJUTANT_AGENT_ID from environment
- * 2. Finds the persona agent file on disk at .claude/agents/<name>.md
- * 3. Strips YAML frontmatter and outputs the prompt to stdout
- * 4. Exits silently when no agent file is found (non-persona agents)
+ * The hook script (adj-j0jpz: rewritten to be BACKEND-SOURCED, not file-sourced) is a bash
+ * script that:
+ * 1. Reads ADJUTANT_AGENT_ID from environment (exits silently if unset)
+ * 2. Resolves the backend origin from .mcp.json (or ADJUTANT_BACKEND_URL / localhost)
+ * 3. curls GET /api/agents/<id>/persona-prompt — the backend is the source of truth, so
+ *    this works in ANY project/worktree, not just the adjutant repo
+ * 4. On 200: outputs the rendered persona prompt to stdout
+ * 5. On 404: exits silently (legitimate no-persona / generic agent)
+ * 6. On failure while a persona IS assigned (ADJUTANT_PERSONA_ID set): prints a LOUD
+ *    warning instead of the old silent exit 0 (RC3 — a no-op must never look like success)
  */
 
 import { describe, it, expect } from "vitest";
@@ -52,30 +57,31 @@ describe("persona-inject.sh hook script", () => {
     expect(output.trim()).toBe("");
   });
 
-  it("should read agent files from .claude/agents/ directory", () => {
+  it("should fetch the persona from the backend by callsign (backend-sourced, adj-j0jpz)", () => {
     const content = readFileSync(HOOK_SCRIPT, "utf8");
 
-    // Should reference the agents directory
-    expect(content).toContain("agents");
-    expect(content).toContain(".md");
-    // Should check ADJUTANT_AGENT_ID
+    // Backend is the source of truth — works in any project/worktree, not just adjutant.
     expect(content).toContain("ADJUTANT_AGENT_ID");
+    expect(content).toContain("curl");
+    expect(content).toContain("/api/agents/");
+    expect(content).toContain("persona-prompt");
   });
 
-  it("should strip YAML frontmatter from agent files", () => {
+  it("should resolve the backend origin from .mcp.json (not hardcoded)", () => {
     const content = readFileSync(HOOK_SCRIPT, "utf8");
 
-    // Should use awk to strip frontmatter (--- delimited blocks)
-    expect(content).toContain("awk");
-    expect(content).toContain("---");
+    expect(content).toContain(".mcp.json");
+    expect(content).toContain("ADJUTANT_BACKEND_URL");
   });
 
-  it("should not call the API or use curl", () => {
+  it("should be LOUD when a persona is assigned but delivery fails, not silent (RC3)", () => {
     const content = readFileSync(HOOK_SCRIPT, "utf8");
 
-    // Hook reads from disk now, not from the API
-    expect(content).not.toContain("curl");
-    expect(content).not.toContain("/api/personas/");
+    // A persona-assigned-but-undeliverable case must warn into the session.
+    expect(content).toContain("ADJUTANT_PERSONA_ID");
+    expect(content).toContain("PERSONA NOT LOADED");
+    // And a genuine 404 (no persona) stays silent.
+    expect(content).toContain("404");
   });
 });
 

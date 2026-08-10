@@ -41,6 +41,14 @@ const styles = {
     width: '100%',
     boxSizing: 'border-box',
     fontFamily: '"Share Tech Mono", "Courier New", monospace',
+    // The host `.tab-view` is `overflow: hidden` (App.tsx / main.css), so a tab
+    // only scrolls if its mounted view supplies its own scroll container — every
+    // sibling view (BeadsList, EpicsList, CrewStats) does. ProjectsView did not,
+    // so with many projects the list was clipped at the viewport with no scroll
+    // (adj-8mnmd). Fill the tab height and scroll internally.
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
   } as CSSProperties,
 
   hint: {
