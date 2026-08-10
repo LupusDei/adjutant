@@ -22,6 +22,7 @@ export { createChannelsRouter } from "./channels.js";
 export { createProposalsRouter } from "./proposals.js";
 export { createPublicProposalsRouter } from "./public-proposals.js";
 export { createArtifactsRouter } from "./artifacts.js";
+export { createPublicArtifactsRouter } from "./public-artifacts.js";
 export { createAvatarRouter } from "./avatar.js";
 export { createBridgeRouter } from "./bridge.js";
 export { createDashboardRouter } from "./dashboard.js";

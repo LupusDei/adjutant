@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { agentsRouter, beadsRouter, costsRouter, createArtifactsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
+import { agentsRouter, beadsRouter, costsRouter, createArtifactsRouter, createAvatarRouter, createCallsignsRouter, createDashboardRouter, createEventsRouter, createMessagesRouter, createOverviewRouter, createPersonasRouter, createProjectsRouter, createProposalsRouter, createPublicArtifactsRouter, createPublicProposalsRouter, createQuestionsRouter, createSchedulesRouter, createWebhooksRouter, devicesRouter, mcpRouter, permissionsRouter, sessionsRouter, statusRouter, swarmsRouter, tunnelRouter, voiceRouter } from "./routes/index.js";
 import { createDashboardService } from "./services/dashboard-service.js";
 import { apiKeyAuth } from "./middleware/index.js";
 import { logInfo, logWarn } from "./utils/index.js";
@@ -166,6 +166,9 @@ app.use((req, res, next) => {
 // Public, unauthenticated proposal pages (adj-200). MUST be mounted BEFORE apiKeyAuth
 // so a shareable /p/:token link works in any browser with no API key.
 app.use("/p", createPublicProposalsRouter(proposalStore));
+// adj-j7az6 — Public, unauthenticated Artifact pages. Same fail-closed no-existence-leak
+// contract as /p; mounted BEFORE apiKeyAuth so a shareable /a/:token link works with no key.
+app.use("/a", createPublicArtifactsRouter(artifactStore));
 
 // adj-181.3 / adj-181.2 — question triage service. Constructed here (BEFORE the /avatar
 // mount) because the read-only Bridge tool bridge depends on it, and the iOS/default

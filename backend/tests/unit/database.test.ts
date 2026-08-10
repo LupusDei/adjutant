@@ -91,7 +91,7 @@ describe("database", () => {
         const migrations = db
           .prepare("SELECT * FROM migrations")
           .all() as { name: string }[];
-        expect(migrations).toHaveLength(38); // adj-207: migration 038-agent-status added (was 37 at 037-message-attachments)
+        expect(migrations).toHaveLength(39); // adj-j7az6: migration 039-artifacts added (was 38 at 038-agent-status)
         expect(migrations[0]?.name).toBe("001-initial.sql");
       } finally {
         db.close();
