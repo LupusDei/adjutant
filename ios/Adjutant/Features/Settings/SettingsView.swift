@@ -18,6 +18,9 @@ struct SettingsView: View {
                 // Projects (moved from the bottom tab bar — adj-202)
                 projectsSection
 
+                // Artifacts (global/personal HTML pages — adj-j7az6)
+                artifactsSection
+
                 // Theme Section
                 themeSection
 
@@ -80,6 +83,30 @@ struct SettingsView: View {
                     Image(systemName: "folder")
                         .foregroundColor(theme.primary)
                     CRTText("MANAGE PROJECTS", style: .body)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(theme.dim)
+                }
+                .padding(.vertical, CRTTheme.Spacing.xs)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, CRTTheme.Spacing.md)
+    }
+
+    // MARK: - Artifacts (global/personal HTML pages — adj-j7az6)
+
+    private var artifactsSection: some View {
+        CRTCard(header: "ARTIFACTS") {
+            NavigationLink {
+                ArtifactsView()
+            } label: {
+                HStack(spacing: CRTTheme.Spacing.sm) {
+                    Image(systemName: "doc.richtext")
+                        .foregroundColor(theme.primary)
+                    CRTText("VIEW ARTIFACTS", style: .body)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))

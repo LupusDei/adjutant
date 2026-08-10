@@ -22,6 +22,13 @@ public final class ArtifactsViewModel: ObservableObject {
     @Published public private(set) var errorMessage: String?
     /// The artifact currently selected for viewing, else nil.
     @Published public var selectedArtifact: Artifact?
+    /// The composed, self-contained document for the selected artifact (drives the
+    /// WKWebView viewer), else nil.
+    @Published public private(set) var documentHTML: String?
+    /// True while the selected artifact's composed document is being fetched.
+    @Published public private(set) var isLoadingDocument: Bool = false
+    /// Error message from the last document fetch, else nil.
+    @Published public private(set) var documentError: String?
 
     private let apiClient: APIClient
     private let serverBaseURL: () -> String?
@@ -58,6 +65,32 @@ public final class ArtifactsViewModel: ObservableObject {
     /// Clear the current selection.
     public func clearSelection() {
         selectedArtifact = nil
+    }
+
+    // MARK: - Viewer (composed document)
+
+    /// Select an artifact and fetch its composed, self-contained document for the WKWebView
+    /// viewer. Works for PRIVATE artifacts (authed owner download endpoint). Sets
+    /// `documentError` on failure.
+    public func openDocument(for artifact: Artifact) async {
+        selectedArtifact = artifact
+        documentHTML = nil
+        documentError = nil
+        isLoadingDocument = true
+        do {
+            documentHTML = try await apiClient.downloadArtifactDocument(id: artifact.id)
+        } catch {
+            documentError = Self.describe(error)
+        }
+        isLoadingDocument = false
+    }
+
+    /// Dismiss the viewer: clears the selection and the fetched document/error.
+    public func closeDocument() {
+        selectedArtifact = nil
+        documentHTML = nil
+        documentError = nil
+        isLoadingDocument = false
     }
 
     // MARK: - Create
