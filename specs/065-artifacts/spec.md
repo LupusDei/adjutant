@@ -1,7 +1,7 @@
 # Feature: Adjutant Artifacts — Publish, Share & Download Standalone HTML Pages
 
-**Status:** Planned
-**Root epic:** (assigned in Phase 3)
+**Status:** ✅ Implemented & shipped (iOS 2.34 build 67; web live)
+**Root epic:** adj-j7az6 (closed)
 **Owner:** Justin Martin (the General)
 
 ## Summary
