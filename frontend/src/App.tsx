@@ -13,6 +13,7 @@ import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { DashboardView } from "./components/dashboard/OverviewDashboard";
 import { ProposalsView } from "./components/proposals/ProposalsView";
 import { ProposalPage } from "./components/proposals/ProposalPage";
+import { ArtifactsView } from "./components/artifacts/ArtifactsView";
 import { ProjectsView } from "./components/projects/ProjectsView";
 import { TimelineView } from "./components/timeline/TimelineView";
 import { EpicGraphPage } from "./components/beads/EpicGraphPage";
@@ -52,7 +53,7 @@ function migrateTheme(stored: string | null): ThemeId {
   return legacyMap[stored] ?? 'starcraft';
 }
 
-type TabId = "dashboard" | "bridge" | "chat" | "epics" | "crew" | "beads" | "projects" | "timeline" | "proposals" | "questions" | "settings";
+type TabId = "dashboard" | "bridge" | "chat" | "epics" | "crew" | "beads" | "projects" | "timeline" | "proposals" | "artifacts" | "questions" | "settings";
 
 interface Tab {
   id: TabId;
@@ -70,6 +71,7 @@ const TABS: Tab[] = [
   { id: "projects", label: "PROJECTS", icon: "🗂" },
   { id: "timeline", label: "TIMELINE", icon: "⏱" },
   { id: "proposals", label: "PROPOSALS", icon: "💡" },
+  { id: "artifacts", label: "ARTIFACTS", icon: "📄" },
   { id: "questions", label: "QUESTIONS", icon: "?" },
   { id: "settings", label: "SETTINGS", icon: "⚙️" },
 ];
@@ -206,6 +208,13 @@ function AppContent() {
             aria-hidden={activeTab !== "proposals"}
           >
             <ProposalsView isActive={activeTab === "proposals"} />
+          </section>
+          <section
+            className="tab-view"
+            hidden={activeTab !== "artifacts"}
+            aria-hidden={activeTab !== "artifacts"}
+          >
+            <ArtifactsView isActive={activeTab === "artifacts"} />
           </section>
           <section
             className="tab-view"

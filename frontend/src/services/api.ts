@@ -18,6 +18,7 @@ import type {
   ConversationUnread,
   UnreadCount,
   Proposal,
+  Artifact,
   SessionInfo,
   ProjectInfo,
   ProjectHealth,
@@ -91,6 +92,32 @@ export function publicProposalUrl(shareToken: string): string {
       ? window.location.origin
       : API_BASE_URL.replace(/\/api\/?$/, '');
   return `${origin}/p/${shareToken}`;
+}
+
+/**
+ * Build the no-API-key public URL for a published artifact from its share token.
+ *
+ * The public page (`GET /a/:token`) is served by the backend at the API host
+ * WITHOUT the `/api` prefix (mirrors the proposal Path A contract). When the API
+ * base is relative (`/api`) the page is same-origin; when it points at a
+ * different host we strip the trailing `/api`.
+ */
+export function buildPublicArtifactUrl(shareToken: string): string {
+  const origin =
+    API_BASE_URL === '/api'
+      ? window.location.origin
+      : API_BASE_URL.replace(/\/api\/?$/, '');
+  return `${origin}/a/${shareToken}`;
+}
+
+/**
+ * Build the authenticated owner download URL for an artifact
+ * (`GET /api/artifacts/:id/download`). This endpoint sits behind `apiKeyAuth`,
+ * so a bare `<a href>` (which cannot carry the Authorization header) would 401 —
+ * use {@link api.artifacts.download} to fetch WITH the key and get a blob.
+ */
+export function buildArtifactDownloadUrl(id: string): string {
+  return `${API_BASE_URL}/artifacts/${encodeURIComponent(id)}/download`;
 }
 
 // =============================================================================
@@ -835,6 +862,108 @@ export const api = {
       return apiFetch(`/proposals/${encodeURIComponent(id)}/unpublish`, {
         method: 'POST',
       });
+    },
+  },
+
+  /**
+   * Artifacts operations (adj-j7az6) — global/personal standalone HTML pages,
+   * decoupled from proposals and NOT project-scoped. One fleet-wide library.
+   */
+  artifacts: {
+    /** List all artifacts (newest-first). */
+    async list(): Promise<Artifact[]> {
+      return apiFetch('/artifacts');
+    },
+
+    /** Get a single artifact by id. */
+    async get(id: string): Promise<Artifact> {
+      return apiFetch(`/artifacts/${encodeURIComponent(id)}`);
+    },
+
+    /** Create an artifact from authored HTML + a title (optional description/slug). */
+    async create(input: {
+      title: string;
+      html: string;
+      description?: string;
+      slug?: string;
+    }): Promise<Artifact> {
+      return apiFetch('/artifacts', { method: 'POST', body: input });
+    },
+
+    /** Update an artifact (any subset of title/html/description/slug). */
+    async update(
+      id: string,
+      fields: { title?: string; html?: string; description?: string; slug?: string },
+    ): Promise<Artifact> {
+      return apiFetch(`/artifacts/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: fields,
+      });
+    },
+
+    /** Delete an artifact. */
+    async delete(id: string): Promise<{ id: string; deleted: boolean }> {
+      return apiFetch(`/artifacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+
+    /**
+     * Publish an artifact, generating (or reviving) its public share link.
+     * Returns the updated artifact plus the full no-API-key public URL
+     * (`<origin>/a/<shareToken>`) served by `GET /a/:token`.
+     */
+    async publish(id: string): Promise<{ artifact: Artifact; publicUrl: string }> {
+      return apiFetch(`/artifacts/${encodeURIComponent(id)}/publish`, {
+        method: 'POST',
+      });
+    },
+
+    /**
+     * Unpublish an artifact — revokes public access. The share token is retained
+     * (a later re-publish revives the same link) but `GET /a/:token` will 404.
+     */
+    async unpublish(id: string): Promise<{ artifact: Artifact }> {
+      return apiFetch(`/artifacts/${encodeURIComponent(id)}/unpublish`, {
+        method: 'POST',
+      });
+    },
+
+    /**
+     * Download the composed, sanitized, self-contained document for an artifact.
+     *
+     * `GET /api/artifacts/:id/download` sits behind `apiKeyAuth`, so a plain
+     * anchor/`window.open` cannot carry the bearer key. This fetches WITH the key
+     * and hands back the `Blob` plus a safe filename parsed from the
+     * `Content-Disposition` header (falling back to `artifact-<id>.html`). The
+     * caller turns the blob into an object URL and triggers the browser download.
+     */
+    async download(id: string): Promise<{ blob: Blob; filename: string }> {
+      const headers: Record<string, string> = {};
+      const apiKey = getApiKey();
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+      let response: Response;
+      try {
+        response = await fetch(buildArtifactDownloadUrl(id), { headers });
+      } catch (err) {
+        throw new ApiError(
+          'DOWNLOAD_ERROR',
+          err instanceof Error ? err.message : 'Artifact download failed',
+        );
+      }
+      if (!response.ok) {
+        throw new ApiError(
+          'DOWNLOAD_ERROR',
+          `Artifact download failed (${response.status})`,
+          undefined,
+          response.status,
+        );
+      }
+
+      const disposition = response.headers.get('content-disposition') ?? '';
+      const match = /filename="?([^"]+)"?/i.exec(disposition);
+      const filename = match?.[1] ?? `artifact-${id}.html`;
+      const blob = await response.blob();
+      return { blob, filename };
     },
   },
 
