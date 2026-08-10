@@ -25,17 +25,23 @@ import { resolvePublicBaseUrl } from "../utils/public-url.js";
 
 /**
  * Derive a filesystem-safe download filename base from an artifact. Prefers the explicit
- * slug, else slugifies the title, else falls back to the id — so the download always has
- * a sensible, safe `<name>.html` filename (no path traversal / header-injection chars).
+ * slug, else slugifies the title; when neither yields any sluggable characters it falls
+ * back to `artifact-<id>.html` — so the download always has a sensible, safe `<name>.html`
+ * filename (no path traversal / header-injection chars). The `artifact-<id>` fallback is
+ * kept identical to the iOS (`artifactDownloadFilename`) and web (`api.artifacts.download`)
+ * clients so every layer names the same artifact the same way (adj-j7az6.5.3).
  */
 export function artifactFilename(artifact: Artifact): string {
-  const source = artifact.slug?.trim() || artifact.title?.trim() || artifact.id;
-  const slug = source
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return `${slug || artifact.id}.html`;
+  for (const source of [artifact.slug, artifact.title]) {
+    const slug = (source ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80)
+      .replace(/-+$/g, "");
+    if (slug) return `${slug}.html`;
+  }
+  return `artifact-${artifact.id}.html`;
 }
 
 export function createArtifactsRouter(

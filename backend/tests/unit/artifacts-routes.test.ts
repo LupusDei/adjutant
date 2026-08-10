@@ -252,5 +252,17 @@ describe("artifacts-routes", () => {
       const res = await request(app).get("/api/artifacts/nope/download");
       expect(res.status).toBe(404);
     });
+
+    // adj-j7az6.5.3 — cross-client filename parity. When neither slug nor a
+    // sluggable title yields a name, the fallback MUST be `artifact-<id>.html` to
+    // match the iOS (artifactDownloadFilename) and web (api.artifacts.download)
+    // clients and the documented contract — NOT a bare `<id>.html`.
+    it("should fall back to artifact-<id>.html when the title has no sluggable chars", async () => {
+      const id = await createArtifactViaApi({ title: "!!!", html: "<p>x</p>" });
+      const res = await request(app).get(`/api/artifacts/${id}/download`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers["content-disposition"]).toContain(`artifact-${id}.html`);
+    });
   });
 });
