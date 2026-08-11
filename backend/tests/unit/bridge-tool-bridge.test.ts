@@ -746,8 +746,59 @@ describe("read_messages", () => {
       expect(data.messages.map((m) => m.text)).toEqual(["Starting adj-202", "How is the bridge epic?", "Phase 2 complete"]);
       expect(data.messages[0]).toEqual({ from: "fenix", to: "user", text: "Starting adj-202" });
     }
-    // Default limit applied (10) when none supplied.
-    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 10 }));
+    // Default limit applied (15) when none supplied.
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+  });
+
+  it("returns a long message IN FULL, not a 300-char preview (adj-202.11.1)", async () => {
+    // ~2,500-char agent message — the kind the Commander asks the avatar to summarize.
+    const longBody = "The squad shipped Artifacts. ".repeat(90); // ~2,610 chars
+    const getMessages = vi.fn().mockReturnValue([
+      { id: "m1", agentId: "abathur", recipient: "user", role: "agent", body: longBody, conversationId: "dm_x", createdAt: "2026-08-10T00:00:00Z" },
+    ]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    const res = await bridge.executeTool({ tool: "read_messages", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { messages: { text: string }[] };
+      // The whole message comes through (well past the old 300-char cap), capped only at 4000.
+      expect(data.messages[0].text.length).toBeGreaterThan(2000);
+      expect(data.messages[0].text.length).toBeLessThanOrEqual(4000);
+    }
+  });
+
+  it("keeps the NEWEST messages whole and drops the oldest once the total-size budget is hit", async () => {
+    // 6 large messages (~3k chars each) exceed the ~11k total budget → only the newest few survive.
+    const big = (n: number) => ({
+      id: `m${n}`, agentId: "abathur", recipient: "user", role: "agent",
+      body: `msg${n} `.padEnd(3000, "z"), conversationId: "dm_x",
+      createdAt: `2026-08-1${n}T00:00:00Z`,
+    });
+    // Store returns newest-first: m6 (newest) ... m1 (oldest).
+    const getMessages = vi.fn().mockReturnValue([big(6), big(5), big(4), big(3), big(2), big(1)]);
+    const messageStore = {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
+    const res = await bridge.executeTool({ tool: "read_messages", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { messages: { text: string }[]; count: number; olderOmittedForSize?: number };
+      // Fewer than 6 survive (budget-bounded), and it flags how many were dropped.
+      expect(data.count).toBeLessThan(6);
+      expect(data.olderOmittedForSize).toBe(6 - data.count);
+      // The NEWEST message (m6) is retained (last in oldest-first order).
+      expect(data.messages[data.messages.length - 1].text).toContain("msg6");
+    }
   });
 
   it("resolves a spoken agent name to the canonical id before filtering (Fenix → fenix)", async () => {
@@ -783,7 +834,7 @@ describe("read_messages", () => {
     expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ agentId: "kerrigan" }));
   });
 
-  it("caps the limit at 15 even if a larger value is requested (stay under the RPC ceiling)", async () => {
+  it("caps the fetch limit at 30 even if a larger value is requested (the total-size budget bounds the payload)", async () => {
     const getMessages = vi.fn().mockReturnValue([]);
     const messageStore = {
       getMessages,
@@ -793,7 +844,7 @@ describe("read_messages", () => {
     const bridge = createBridgeToolBridge(makeDeps({ messageStore }));
     await bridge.executeTool({ tool: "read_messages", args: { limit: 500 } });
 
-    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 30 }));
   });
 
   it("scopes strictly to a conversationId when given (bleed-free)", async () => {

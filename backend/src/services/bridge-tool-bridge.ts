@@ -154,12 +154,20 @@ const getAgentDetailArgs = z.object({
   agent: z.string().min(1),
 });
 
-// The LiveKit RPC response limit is ~15KB (responses chunk at STREAM_CHUNK_SIZE=15e3), so these
-// are sized for USEFULNESS, not paranoia: ~15 messages × 300-char bodies ≈ 5KB, well under the
-// ceiling. (An earlier 440-byte cap was a misdiagnosis — payload size was never the failure.)
-const READ_MESSAGES_DEFAULT_LIMIT = 10;
-const READ_MESSAGES_MAX_LIMIT = 15;
-const READ_MESSAGES_BODY_MAX = 300;
+// The LiveKit RPC response chunks at STREAM_CHUNK_SIZE=15e3 (~15KB), so the WHOLE read_messages
+// return must stay under that — but the old 300-char/message cap was far too aggressive: the
+// Commander relies on the avatar to SUMMARIZE what an agent said, and a 300-char slice loses
+// almost the entire message (adj-202.11.1). Fix: give each message a generous cap that holds a
+// full message, and bound the BATCH with a total-character budget instead — so a single recent
+// message comes through COMPLETE, and multi-message reads keep the newest ones whole and drop
+// the oldest once the budget is reached (never silently exceeding the RPC ceiling).
+const READ_MESSAGES_DEFAULT_LIMIT = 15;
+const READ_MESSAGES_MAX_LIMIT = 30;
+// Per-message cap — holds a full message (our longest agent messages run ~2–3k chars).
+const READ_MESSAGES_BODY_MAX = 4000;
+// Total text budget across the returned batch. ~11k chars of text + JSON envelope keeps the
+// whole payload comfortably under the ~15KB chunk ceiling. Newest messages are kept first.
+const READ_MESSAGES_TOTAL_BUDGET = 11000;
 
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
@@ -685,26 +693,36 @@ async function runReadMessages(
   if (parsed.data.conversationId !== undefined) opts.conversationId = parsed.data.conversationId;
 
   const newestFirst = deps.messageStore.getMessages(opts);
-  // Present oldest → newest for natural narration of the prior discussion.
-  const ordered = [...newestFirst].reverse();
-  // Plain-ASCII, whitespace-collapsed, hard-capped — and ONLY from/to/text (no nulls, no ids/
-  // timestamps) — so the RPC return stays small + safe. Large or emoji-heavy payloads fail the
-  // Runway tool RPC ("RPC cancelled or failed"); the avatar only needs a short narratable digest.
-  // Collapse control chars + whitespace (keep unicode — the ~15KB RPC ceiling makes ASCII-stripping
-  // unnecessary) and cap each body so a batch stays well under the limit while staying readable.
+  // Collapse control chars + whitespace and cap each body at READ_MESSAGES_BODY_MAX so a single
+  // message comes through in FULL (not a 300-char preview). Keep unicode — the avatar needs the
+  // real words to summarize what an agent said.
   const clean = (s: string): string =>
     s
       .replace(/[ -]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, READ_MESSAGES_BODY_MAX);
-  const messages = ordered.map((m) => ({
-    from: m.agentId,
-    to: m.recipient ?? "",
-    text: clean(m.body),
-  }));
+  // Bound the BATCH with a total-character budget so the RPC payload stays under the ~15KB chunk
+  // ceiling. Walk newest → oldest, keeping whole messages until the budget is reached; ALWAYS keep
+  // at least the newest message even if it alone is large (already capped at BODY_MAX).
+  const keptNewestFirst: { from: string; to: string; text: string }[] = [];
+  let used = 0;
+  for (const m of newestFirst) {
+    const text = clean(m.body);
+    if (keptNewestFirst.length > 0 && used + text.length > READ_MESSAGES_TOTAL_BUDGET) break;
+    used += text.length;
+    keptNewestFirst.push({ from: m.agentId, to: m.recipient ?? "", text });
+  }
+  const olderOmittedForSize = newestFirst.length - keptNewestFirst.length;
+  // Present oldest → newest for natural narration of the prior discussion.
+  const messages = keptNewestFirst.reverse();
 
-  return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
+  return ok(TOOL_READ_MESSAGES, projectId, {
+    messages,
+    count: messages.length,
+    // So the avatar can say "showing the N most recent" when older ones were dropped for size.
+    ...(olderOmittedForSize > 0 ? { olderOmittedForSize } : {}),
+  });
 }
 
 /**
