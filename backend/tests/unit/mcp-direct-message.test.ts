@@ -175,6 +175,23 @@ describe("direct_message MCP tool", () => {
     expect(lowered).toContain("rejected");
   });
 
+  // The previous version of this description said sessionsFound above 0 meant "the agent
+  // is running". findByName returns OFFLINE session records too, so that was a claim the
+  // number cannot support — the epic's own defect one level down, in the sentence a model
+  // reads. Asserting only that the field is MENTIONED keeps passing while the claim is
+  // wrong, so pin the caveat itself.
+  it("does not let the description claim sessionsFound establishes that the agent is running", async () => {
+    const tools = await registerTools();
+    const lowered = tools.get("direct_message")!.description!.toLowerCase();
+
+    // It must frame the number as a RECORD, not as a running process...
+    expect(lowered).toContain("record");
+    // ...and must explicitly refuse the inference rather than leaving it open.
+    expect(lowered).toMatch(/does not establish|do not tell anyone/);
+    // The exact sentence that was wrong must not come back.
+    expect(lowered).not.toMatch(/sessionsfound above 0 — the agent is running/);
+  });
+
   it("injects into a live recipient session and reports the count it actually reached", async () => {
     const sendInput = vi.fn().mockResolvedValue(true);
     mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }], sendInput));

@@ -72,12 +72,25 @@ export interface DirectMessageResult {
    *
    * It exists to split the two causes of `deliveredToSessions === 0`, which are
    * different sentences to say to a human:
-   *   - `sessionsFound === 0` — nobody by that name is running. Possibly the name does
-   *     not exist at all, and the sender should correct it.
-   *   - `sessionsFound > 0` — they are there and every injection failed. The recipient
-   *     is real but not reachable right now.
+   *   - `sessionsFound === 0` — no session is on record for that name, so there was
+   *     nothing to deliver into.
+   *   - `sessionsFound > 0` — a session is on record and nothing accepted the message.
    * Reporting a bare 0 forces the caller to guess between those, and a guess in Syl's
    * voice to the Commander is the failure class this whole epic exists to end.
+   *
+   * **READ THE NAME NARROWLY. `found` MEANS "A RECORD EXISTS", NOT "RUNNING".**
+   * `findByName` returns every session with that name INCLUDING ones whose status is
+   * `offline`, so an agent that stopped without its record being reaped still counts.
+   * The reverse gap exists too: an unmanaged tmux agent on the roster may have no
+   * bridge session record and count 0 while it is up. So `> 0` is usually "up but
+   * unreachable" and `=== 0` is usually "not running", but neither is entailed, and no
+   * caller may assert the agent's run state on this number alone. Say what it reports —
+   * whether a session was on record — and leave the inference to something that
+   * actually knows.
+   *
+   * The name invites exactly the inference this comment refuses; it is kept because the
+   * field is already consumed in two repos, and the defence is this sentence sitting
+   * next to it.
    *
    * 0 when the session bridge is uninitialized: we do not know of any session.
    */
