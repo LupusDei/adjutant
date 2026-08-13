@@ -190,6 +190,11 @@ describe("direct_message MCP tool", () => {
     expect(lowered).toMatch(/does not establish|do not tell anyone/);
     // The exact sentence that was wrong must not come back.
     expect(lowered).not.toMatch(/sessionsfound above 0 — the agent is running/);
+    // syl-j8fa.7 made the old "check the name is right" advice stale: an unknown name is
+    // rejected before delivery, so a zero can no longer mean a typo. The description has
+    // to say what the zero DOES establish, not just what it does not.
+    expect(lowered).toContain("registered");
+    expect(lowered).not.toContain("check the name is right");
   });
 
   it("injects into a live recipient session and reports the count it actually reached", async () => {
