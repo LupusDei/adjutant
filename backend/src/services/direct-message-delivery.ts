@@ -55,16 +55,31 @@ export interface DirectMessageResult {
   messageId: string;
   timestamp: string;
   conversationId: string;
-  /** Number of live recipient sessions the message was injected into (0 ⇒ offline/unknown). */
+  /**
+   * How many live recipient sessions the message reached. **The meaning depends on
+   * which entry point produced it**, and the difference is the whole point of
+   * {@link deliverDirectMessageAwaited}:
+   *   - {@link deliverDirectMessage} — sessions FOUND in the registry. The injections
+   *     are fire-and-forget, so a positive number means "a live session exists", not
+   *     "the text arrived".
+   *   - {@link deliverDirectMessageAwaited} — injections that actually resolved true.
+   *     0 ⇒ nobody received it.
+   */
   deliveredToSessions: number;
 }
 
+/** Everything the two entry points share: the persisted message and its envelope. */
+interface PreparedDelivery {
+  message: ReturnType<MessageStore["insertMessage"]>;
+  conversationId: string;
+  deliveryText: string;
+}
+
 /**
- * Persist a direct message, broadcast it, and inject it into the recipient's live
- * session(s). Never throws on the delivery leg — an uninitialized session bridge just
- * means the recipient pulls the message via MCP instead of a live nudge.
+ * Persist, broadcast, and (optionally) emit the timeline event. Everything up to the
+ * injection leg — which is the only thing the sync and awaited paths do differently.
  */
-export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessageInput): DirectMessageResult {
+function prepareDelivery(deps: DirectMessageDeps, input: DirectMessageInput): PreparedDelivery {
   const { from, to, body, role } = input;
 
   // DM peer normalization mirrors the user/MCP paths: "mayor/" is the legacy "user" alias,
@@ -112,10 +127,24 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
     });
   }
 
-  // Inject into the recipient agent's live session(s). sendInput handles status-based
-  // routing; we mark the message delivered once an inject succeeds.
+  return { message, conversationId, deliveryText: input.deliveryText ?? body };
+}
+
+/**
+ * Persist a direct message, broadcast it, and inject it into the recipient's live
+ * session(s). Never throws on the delivery leg — an uninitialized session bridge just
+ * means the recipient pulls the message via MCP instead of a live nudge.
+ *
+ * The injection is deliberately fire-and-forget: both callers answer an HTTP request or
+ * a tool call and must not block on tmux I/O. The cost is that `deliveredToSessions`
+ * counts sessions FOUND. Callers that must report arrival honestly want
+ * {@link deliverDirectMessageAwaited}.
+ */
+export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessageInput): DirectMessageResult {
+  const { from, to } = input;
+  const { message, conversationId, deliveryText } = prepareDelivery(deps, input);
+
   let deliveredToSessions = 0;
-  const deliveryText = input.deliveryText ?? body;
   // adj-203 US2: a message carrying image attachments delivers a richer screenshot
   // prompt (absolute paths + body) via the attachment delivery service instead of the
   // plain body, so the agent's Claude can Read the image. Both legs are fire-and-forget
@@ -154,6 +183,69 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
   }
 
   logInfo("direct message delivered", { from, to, messageId: message.id, deliveredToSessions });
+
+  return { messageId: message.id, timestamp: message.createdAt, conversationId, deliveredToSessions };
+}
+
+/**
+ * As {@link deliverDirectMessage}, but the injection leg is AWAITED and the returned
+ * `deliveredToSessions` counts only the sends that actually resolved true. A 0 means
+ * nobody received it.
+ *
+ * WHY A SIBLING FUNCTION rather than an `awaitDelivery` option on the existing export
+ * (syl-j8fa.1): an option that flips the return between `T` and `Promise<T>` needs
+ * overloads to type honestly, and every existing call site then reads as "might be a
+ * promise" at a glance even though it never is. The two behaviours also differ in what
+ * the number MEANS, not merely in when it is available — "a live session exists" versus
+ * "the text was injected" — and a boolean flag hides that behind a truthy argument at
+ * the call site. A separate name makes the caller state which guarantee it is asking
+ * for, and leaves `deliverDirectMessage` byte-for-byte the contract its two existing
+ * callers already depend on. The shared persist/broadcast/event core lives in
+ * `prepareDelivery`, so there is still exactly one implementation of the message half.
+ *
+ * Use this wherever the count is REPORTED BACK to a caller who will act on it — the
+ * `direct_message` MCP tool is the motivating case: a model that is told "sent" when
+ * nothing arrived will narrate a delivery that never happened.
+ *
+ * Still never throws on the delivery leg: an uninitialized bridge, a dead pane, or a
+ * rejecting `sendInput` all come back as 0 with the message persisted and broadcast.
+ */
+export async function deliverDirectMessageAwaited(
+  deps: DirectMessageDeps,
+  input: DirectMessageInput,
+): Promise<DirectMessageResult> {
+  const { from, to } = input;
+  const { message, conversationId, deliveryText } = prepareDelivery(deps, input);
+
+  let deliveredToSessions = 0;
+  const imageAttachments = (message.attachments ?? []).filter((a) => a.kind === "image");
+  try {
+    const bridge = getSessionBridge();
+    if (imageAttachments.length > 0) {
+      // adj-203 US2: image-bearing messages inject a richer screenshot prompt. Await it
+      // so the count is the service's real sessionsDelivered, not the online-session
+      // headcount the fire-and-forget path uses.
+      const result = await deliverImageAttachments(
+        { registry: bridge.registry, inputRouter: bridge.inputRouter },
+        { message, recipient: to },
+      );
+      deliveredToSessions = result.sessionsDelivered;
+    } else {
+      const sessions = bridge.registry.findByName(to);
+      // allSettled, not all: one dead pane must not hide the sessions that did receive it.
+      const outcomes = await Promise.allSettled(
+        sessions.map((session) => bridge.sendInput(session.id, deliveryText)),
+      );
+      deliveredToSessions = outcomes.filter((o) => o.status === "fulfilled" && o.value).length;
+    }
+    // Marked once, and only when something actually arrived. `markDelivered` on a
+    // message nobody received is the same lie as returning a positive count.
+    if (deliveredToSessions > 0) deps.store.markDelivered(message.id);
+  } catch {
+    // Session bridge not initialized — recipient will pull via MCP. Count stays 0.
+  }
+
+  logInfo("direct message delivered (awaited)", { from, to, messageId: message.id, deliveredToSessions });
 
   return { messageId: message.id, timestamp: message.createdAt, conversationId, deliveredToSessions };
 }
