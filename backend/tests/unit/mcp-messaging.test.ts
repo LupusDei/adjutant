@@ -81,7 +81,7 @@ describe("MCP Messaging Tools", () => {
   });
 
   describe("registerMessagingTools", () => {
-    it("should register all four messaging tools on the MCP server", async () => {
+    it("should register all five messaging tools on the MCP server", async () => {
       const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
 
       const mockTool = vi.fn();
@@ -89,9 +89,11 @@ describe("MCP Messaging Tools", () => {
 
       registerMessagingTools(mockServer, store);
 
-      expect(mockTool).toHaveBeenCalledTimes(4);
+      expect(mockTool).toHaveBeenCalledTimes(5);
       const toolNames = mockTool.mock.calls.map((call: any[]) => call[0]);
       expect(toolNames).toContain("send_message");
+      // syl-j8fa.2: the awaited, live-session-delivering sibling of send_message.
+      expect(toolNames).toContain("direct_message");
       expect(toolNames).toContain("read_messages");
       expect(toolNames).toContain("list_threads");
       expect(toolNames).toContain("mark_read");

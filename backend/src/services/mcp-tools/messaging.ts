@@ -1,8 +1,8 @@
 /**
  * MCP Messaging Tools for Adjutant.
  *
- * Registers send_message, read_messages, list_threads, and mark_read
- * tools on the MCP server for agent-to-user messaging.
+ * Registers send_message, direct_message, read_messages, list_threads, and mark_read
+ * tools on the MCP server for agent-to-user and agent-to-agent messaging.
  */
 
 import { z } from "zod";
@@ -13,9 +13,43 @@ import { dmConversationId } from "../conversation-store.js";
 import { deliverChannelPostToAgents } from "../channel-delivery.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
+import { deliverDirectMessageAwaited } from "../direct-message-delivery.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 import type { EventStore } from "../event-store.js";
 import type { ConversationStore } from "../conversation-store.js";
+
+/**
+ * Prefix on the text injected into the recipient's tmux session, so the receiving agent
+ * can see who it is from and has a name to reply to. Mirrors `BRIDGE_DIRECTIVE_PREFIX`,
+ * which does the same job for the coordinator's directives.
+ */
+export const DIRECT_MESSAGE_PREFIX = "[DM from ";
+
+/** The injected text for an agent→agent direct message. */
+export function directMessageDeliveryText(from: string, body: string): string {
+  return `${DIRECT_MESSAGE_PREFIX}${from}] ${body}`;
+}
+
+/**
+ * What `direct_message` tells the model it is. This string is the tool's whole contract
+ * with a model deciding whether its message arrived, so it states the failure mode
+ * explicitly: a verb whose failure mode is undocumented gets narrated as success
+ * (syl-j8fa).
+ */
+const DIRECT_MESSAGE_DESCRIPTION = [
+  "Send a direct message to ANOTHER AGENT by name and deliver it into that agent's live session.",
+  "Unlike send_message, which only stores the message for the recipient to pull later, this",
+  "injects the text into the recipient's running session and WAITS to find out whether the",
+  "injection succeeded.",
+  "",
+  "It returns deliveredToSessions: the number of live sessions the text was actually injected",
+  "into. deliveredToSessions of 0 means NOBODY RECEIVED IT — the message is stored, but no",
+  "running agent saw it and none will act on it. Do not report a message as sent, delivered, or",
+  "acknowledged when deliveredToSessions is 0; say it could not be delivered.",
+  "",
+  "Recipients are agent names only. To message the Commander (to: 'user' or 'mayor/'), use",
+  "send_message instead — that direction carries the phone push and has its own handler.",
+].join("\n");
 
 /**
  * Register all messaging MCP tools on the given server.
@@ -211,6 +245,90 @@ export function registerMessagingTools(
             text: JSON.stringify({
               messageId: message.id,
               timestamp: message.createdAt,
+            }),
+          },
+        ],
+      };
+    },
+  );
+
+  // ========================================================================
+  // direct_message (syl-j8fa.2)
+  //
+  // Additive: send_message above is untouched, so no existing agent's messaging
+  // behaviour changes. The difference that matters is the AWAITED injection —
+  // deliverDirectMessageAwaited counts sends that actually resolved true, so the
+  // number this tool hands back is arrival, not "a live session exists".
+  // ========================================================================
+  server.tool(
+    "direct_message",
+    DIRECT_MESSAGE_DESCRIPTION,
+    {
+      to: z
+        .string()
+        .describe("Recipient AGENT NAME. Not 'user' or 'mayor/' — use send_message for the Commander."),
+      body: z.string().describe("Message body. Delivered into the recipient's live session."),
+      threadId: z.string().optional().describe("Thread ID for conversation grouping"),
+      metadata: z.record(z.string(), z.unknown()).optional().describe("Optional metadata"),
+    },
+    async ({ to, body, threadId, metadata }, extra) => {
+      // Identity is the session handshake's answer, never an argument: an agent must not
+      // be able to send as someone else by claiming to.
+      const agentId = extra.sessionId ? getAgentBySession(extra.sessionId) : undefined;
+      if (!agentId) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown session" }) }],
+        };
+      }
+
+      // The agent→user direction carries the APNS push and has its own handler; routing it
+      // through here would deliver to the Commander's (nonexistent) session and skip the
+      // push entirely. Reject before anything is persisted.
+      if (to === "user" || to === "mayor/") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error:
+                  `direct_message delivers to agent sessions only; "${to}" is the Commander. ` +
+                  `Use send_message to reach the Commander — that path carries the phone push.`,
+              }),
+            },
+          ],
+        };
+      }
+
+      const result = await deliverDirectMessageAwaited(
+        { store, ...(eventStore !== undefined ? { eventStore } : {}) },
+        {
+          from: agentId,
+          to,
+          body,
+          role: "agent",
+          emitEvent: true,
+          deliveryText: directMessageDeliveryText(agentId, body),
+          ...(threadId !== undefined ? { threadId } : {}),
+          ...(metadata !== undefined ? { metadata } : {}),
+        },
+      );
+
+      logInfo("MCP direct_message", {
+        agentId,
+        to,
+        messageId: result.messageId,
+        deliveredToSessions: result.deliveredToSessions,
+      });
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              messageId: result.messageId,
+              timestamp: result.timestamp,
+              conversationId: result.conversationId,
+              deliveredToSessions: result.deliveredToSessions,
             }),
           },
         ],
