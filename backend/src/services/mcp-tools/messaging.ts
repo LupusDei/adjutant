@@ -47,6 +47,13 @@ const DIRECT_MESSAGE_DESCRIPTION = [
   "running agent saw it and none will act on it. Do not report a message as sent, delivered, or",
   "acknowledged when deliveredToSessions is 0; say it could not be delivered.",
   "",
+  "It also returns sessionsFound: how many sessions that agent has running, counted before",
+  "delivery was attempted. Read it to say WHY a delivery of 0 failed, because the two causes",
+  "call for different actions:",
+  "  sessionsFound 0 — no agent by that name is running. Check the name is right.",
+  "  sessionsFound above 0 — the agent is running but the injection failed. The name is fine;",
+  "  they are unreachable right now, so retrying later may work.",
+  "",
   "Recipients are agent names only. To message the Commander (to: 'user' or 'mayor/'), use",
   "send_message instead — that direction carries the phone push and has its own handler.",
 ].join("\n");
@@ -318,6 +325,7 @@ export function registerMessagingTools(
         to,
         messageId: result.messageId,
         deliveredToSessions: result.deliveredToSessions,
+        sessionsFound: result.sessionsFound,
       });
 
       return {
@@ -329,6 +337,10 @@ export function registerMessagingTools(
               timestamp: result.timestamp,
               conversationId: result.conversationId,
               deliveredToSessions: result.deliveredToSessions,
+              // Splits a 0 delivery into "no agent by that name is running" and "the
+              // agent is running and the injection failed" — different things to tell
+              // the Commander, and he can act on the first.
+              sessionsFound: result.sessionsFound,
             }),
           },
         ],

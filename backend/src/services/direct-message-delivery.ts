@@ -66,6 +66,22 @@ export interface DirectMessageResult {
    *     0 ⇒ nobody received it.
    */
   deliveredToSessions: number;
+  /**
+   * How many sessions the registry returned for the recipient name, counted BEFORE any
+   * injection was attempted. Always the raw `findByName` count, on every path.
+   *
+   * It exists to split the two causes of `deliveredToSessions === 0`, which are
+   * different sentences to say to a human:
+   *   - `sessionsFound === 0` — nobody by that name is running. Possibly the name does
+   *     not exist at all, and the sender should correct it.
+   *   - `sessionsFound > 0` — they are there and every injection failed. The recipient
+   *     is real but not reachable right now.
+   * Reporting a bare 0 forces the caller to guess between those, and a guess in Syl's
+   * voice to the Commander is the failure class this whole epic exists to end.
+   *
+   * 0 when the session bridge is uninitialized: we do not know of any session.
+   */
+  sessionsFound: number;
 }
 
 /** Everything the two entry points share: the persisted message and its envelope. */
@@ -145,6 +161,7 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
   const { message, conversationId, deliveryText } = prepareDelivery(deps, input);
 
   let deliveredToSessions = 0;
+  let sessionsFound = 0;
   // adj-203 US2: a message carrying image attachments delivers a richer screenshot
   // prompt (absolute paths + body) via the attachment delivery service instead of the
   // plain body, so the agent's Claude can Read the image. Both legs are fire-and-forget
@@ -152,12 +169,14 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
   const imageAttachments = (message.attachments ?? []).filter((a) => a.kind === "image");
   try {
     const bridge = getSessionBridge();
+    // One findByName for both branches, so sessionsFound has ONE definition: the raw
+    // registry count for this name, before any injection is attempted.
+    const sessions = bridge.registry.findByName(to);
+    sessionsFound = sessions.length;
     if (imageAttachments.length > 0) {
       // Count online sessions synchronously for the envelope; the injection itself is
       // a non-awaited tail so the send response is not blocked on tmux I/O.
-      deliveredToSessions = bridge.registry
-        .findByName(to)
-        .filter((s) => s.status !== "offline").length;
+      deliveredToSessions = sessions.filter((s) => s.status !== "offline").length;
       void deliverImageAttachments(
         { registry: bridge.registry, inputRouter: bridge.inputRouter },
         { message, recipient: to },
@@ -167,7 +186,6 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
         })
         .catch(() => {});
     } else {
-      const sessions = bridge.registry.findByName(to);
       for (const session of sessions) {
         deliveredToSessions++;
         bridge
@@ -182,9 +200,9 @@ export function deliverDirectMessage(deps: DirectMessageDeps, input: DirectMessa
     // Session bridge not initialized — recipient will pull via MCP.
   }
 
-  logInfo("direct message delivered", { from, to, messageId: message.id, deliveredToSessions });
+  logInfo("direct message delivered", { from, to, messageId: message.id, deliveredToSessions, sessionsFound });
 
-  return { messageId: message.id, timestamp: message.createdAt, conversationId, deliveredToSessions };
+  return { messageId: message.id, timestamp: message.createdAt, conversationId, deliveredToSessions, sessionsFound };
 }
 
 /**
@@ -218,9 +236,17 @@ export async function deliverDirectMessageAwaited(
   const { message, conversationId, deliveryText } = prepareDelivery(deps, input);
 
   let deliveredToSessions = 0;
+  let sessionsFound = 0;
   const imageAttachments = (message.attachments ?? []).filter((a) => a.kind === "image");
   try {
     const bridge = getSessionBridge();
+    // Counted here, from the registry, for BOTH branches — deliberately not taken from
+    // deliverImageAttachments.sessionsTargeted, which is a different quantity (online
+    // sessions only, and 0 whenever it short-circuits on not-dm/no-image). Letting the
+    // image path inherit that would make sessionsFound mean two different things
+    // depending on whether the message happened to carry a screenshot.
+    const sessions = bridge.registry.findByName(to);
+    sessionsFound = sessions.length;
     if (imageAttachments.length > 0) {
       // adj-203 US2: image-bearing messages inject a richer screenshot prompt. Await it
       // so the count is the service's real sessionsDelivered, not the online-session
@@ -231,7 +257,6 @@ export async function deliverDirectMessageAwaited(
       );
       deliveredToSessions = result.sessionsDelivered;
     } else {
-      const sessions = bridge.registry.findByName(to);
       // allSettled, not all: one dead pane must not hide the sessions that did receive it.
       const outcomes = await Promise.allSettled(
         sessions.map((session) => bridge.sendInput(session.id, deliveryText)),
@@ -242,10 +267,17 @@ export async function deliverDirectMessageAwaited(
     // message nobody received is the same lie as returning a positive count.
     if (deliveredToSessions > 0) deps.store.markDelivered(message.id);
   } catch {
-    // Session bridge not initialized — recipient will pull via MCP. Count stays 0.
+    // Session bridge not initialized — recipient will pull via MCP. Both counts stay 0:
+    // we did not deliver, and we do not know of any session either.
   }
 
-  logInfo("direct message delivered (awaited)", { from, to, messageId: message.id, deliveredToSessions });
+  logInfo("direct message delivered (awaited)", {
+    from,
+    to,
+    messageId: message.id,
+    deliveredToSessions,
+    sessionsFound,
+  });
 
-  return { messageId: message.id, timestamp: message.createdAt, conversationId, deliveredToSessions };
+  return { messageId: message.id, timestamp: message.createdAt, conversationId, deliveredToSessions, sessionsFound };
 }

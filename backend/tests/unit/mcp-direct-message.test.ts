@@ -151,6 +151,9 @@ describe("direct_message MCP tool", () => {
     expect(lowered).toContain("deliveredtosessions");
     expect(lowered).toMatch(/\b0\b|zero/);
     expect(lowered).toContain("send_message"); // points at the right verb for the user
+    // A field the model is not told how to read is a field it will not read. The
+    // description must explain what sessionsFound separates, not merely name it.
+    expect(lowered).toContain("sessionsfound");
   });
 
   it("injects into a live recipient session and reports the count it actually reached", async () => {
@@ -211,7 +214,7 @@ describe("direct_message MCP tool", () => {
     expect(store.getMessage(String(data["messageId"]))!.body).toBe("anyone home");
   });
 
-  it("returns the full envelope: messageId, timestamp, conversationId, deliveredToSessions", async () => {
+  it("returns the full envelope: messageId, timestamp, conversationId, deliveredToSessions, sessionsFound", async () => {
     const sendInput = vi.fn().mockResolvedValue(true);
     mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }], sendInput));
 
@@ -221,11 +224,45 @@ describe("direct_message MCP tool", () => {
     );
 
     expect(Object.keys(data).sort()).toEqual(
-      ["conversationId", "deliveredToSessions", "messageId", "timestamp"].sort(),
+      ["conversationId", "deliveredToSessions", "messageId", "sessionsFound", "timestamp"].sort(),
     );
     expect(typeof data["messageId"]).toBe("string");
     expect(typeof data["timestamp"]).toBe("string");
     expect(String(data["conversationId"])).toMatch(/^dm_/);
+    expect(data["sessionsFound"]).toBe(1);
+  });
+
+  // ==========================================================================
+  // The two zero-delivery causes must be tellable apart FROM THE PAYLOAD, since
+  // that payload is all Syl has when she decides what to tell the Commander:
+  // "there is no agent called that" vs "that agent is not responding".
+  // ==========================================================================
+
+  it("distinguishes 'nobody by that name' from 'they are there and it failed' in the payload", async () => {
+    // (a) no session in the registry for that name.
+    let tools = await registerTools();
+    const absent = parse(
+      await tools.get("direct_message")!.handler({ to: "ghost", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    // (b) sessions exist, every injection fails.
+    const sendInput = vi.fn().mockResolvedValue(false);
+    mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }, { id: "sess-B" }], sendInput));
+    tools = await registerTools();
+    const failed = parse(
+      await tools.get("direct_message")!.handler({ to: "kerrigan", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    // Both delivered nothing, and both are ordinary results with a real id.
+    expect(absent["deliveredToSessions"]).toBe(0);
+    expect(failed["deliveredToSessions"]).toBe(0);
+    expect(absent["error"]).toBeUndefined();
+    expect(failed["error"]).toBeUndefined();
+
+    // On deliveredToSessions alone these two payloads are identical. sessionsFound is
+    // the only thing separating them — that is the point of this assertion.
+    expect(absent["sessionsFound"]).toBe(0);
+    expect(failed["sessionsFound"]).toBe(2);
   });
 
   it("stores threadId and metadata when supplied", async () => {

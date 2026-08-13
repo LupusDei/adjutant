@@ -173,6 +173,44 @@ describe("deliverDirectMessage", () => {
     await Promise.resolve();
     expect(store.markDelivered).not.toHaveBeenCalled();
   });
+
+  it("also reports sessionsFound, so the sync envelope is the same shape as the awaited one", () => {
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A" }, { id: "sess-B" }]) },
+      sendInput: vi.fn().mockResolvedValue(true),
+    });
+    const res = deliverDirectMessage(
+      { store: fakeStore() },
+      { from: "adjutant", to: "kerrigan", body: "go", role: "agent" },
+    );
+    expect(res.sessionsFound).toBe(2);
+  });
+
+  it("reports sessionsFound as the RAW registry count on the image path, not the online-filtered one", () => {
+    const store = fakeStore({
+      insertMessage: vi.fn(() => ({
+        id: "msg-1",
+        createdAt: "2026-06-27T20:00:00.000Z",
+        body: "look",
+        threadId: null,
+        conversationId: "dm_x",
+        metadata: null,
+        attachments: [{ id: "att-1", kind: "image" }],
+      })),
+    });
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A", status: "idle" }, { id: "sess-B", status: "offline" }]) },
+      inputRouter: {},
+      sendInput: vi.fn(),
+    });
+
+    const res = deliverDirectMessage({ store }, { from: "adjutant", to: "kerrigan", body: "look", role: "agent" });
+
+    // Two sessions exist for the name; only one is online. sessionsFound is the
+    // registry answer, deliveredToSessions stays the pre-existing online headcount.
+    expect(res.sessionsFound).toBe(2);
+    expect(res.deliveredToSessions).toBe(1);
+  });
 });
 
 // ============================================================================
@@ -339,6 +377,156 @@ describe("deliverDirectMessageAwaited", () => {
     expect(mockDeliverImageAttachments).toHaveBeenCalledTimes(1);
     expect(res.deliveredToSessions).toBe(1);
     expect(store.markDelivered).toHaveBeenCalledWith("msg-1");
+  });
+
+  // ==========================================================================
+  // sessionsFound: 0 delivered has TWO causes and they are different sentences
+  // for Syl to say to the Commander — "there is no agent called that" versus
+  // "that agent is not responding". A single zero forces her to guess.
+  // ==========================================================================
+
+  it("distinguishes the two zero-delivery cases by sessionsFound", async () => {
+    // (a) nobody by that name is running.
+    const noSessions = await deliverDirectMessageAwaited(
+      { store: fakeStore() },
+      { from: "syl", to: "ghost", body: "go", role: "agent" },
+    );
+
+    // (b) they are there; every injection failed.
+    vi.clearAllMocks();
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A" }, { id: "sess-B" }]) },
+      sendInput: vi.fn().mockResolvedValue(false),
+    });
+    const allFailed = await deliverDirectMessageAwaited(
+      { store: fakeStore() },
+      { from: "syl", to: "kerrigan", body: "go", role: "agent" },
+    );
+
+    // Both delivered nothing...
+    expect(noSessions.deliveredToSessions).toBe(0);
+    expect(allFailed.deliveredToSessions).toBe(0);
+    // ...and the returned objects are NOT interchangeable. This is the assertion
+    // that matters: on deliveredToSessions alone these two are identical.
+    expect(noSessions.sessionsFound).toBe(0);
+    expect(allFailed.sessionsFound).toBe(2);
+    expect(allFailed.sessionsFound).not.toBe(noSessions.sessionsFound);
+  });
+
+  it("reports sessionsFound alongside a successful delivery", async () => {
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A" }, { id: "sess-B" }]) },
+      sendInput: vi.fn(async (id: string) => id === "sess-A"),
+    });
+
+    const res = await deliverDirectMessageAwaited(
+      { store: fakeStore() },
+      { from: "syl", to: "kerrigan", body: "go", role: "agent" },
+    );
+
+    expect(res.sessionsFound).toBe(2);
+    expect(res.deliveredToSessions).toBe(1);
+  });
+
+  it("reports sessionsFound 0 when the session bridge is uninitialized (no session is KNOWN of)", async () => {
+    mockGetSessionBridge.mockImplementation(() => {
+      throw new Error("bridge not ready");
+    });
+    const res = await deliverDirectMessageAwaited(
+      { store: fakeStore() },
+      { from: "syl", to: "kerrigan", body: "go", role: "agent" },
+    );
+    expect(res.sessionsFound).toBe(0);
+    expect(res.deliveredToSessions).toBe(0);
+  });
+
+  it("reports sessionsFound 0 when sendInput rejects but sessions existed", async () => {
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A" }]) },
+      sendInput: vi.fn().mockRejectedValue(new Error("tmux pane is gone")),
+    });
+    const res = await deliverDirectMessageAwaited(
+      { store: fakeStore() },
+      { from: "syl", to: "kerrigan", body: "go", role: "agent" },
+    );
+    // The session WAS found — a rejecting sendInput is "they are there and it
+    // failed", not "nobody is there".
+    expect(res.sessionsFound).toBe(1);
+    expect(res.deliveredToSessions).toBe(0);
+  });
+
+  it("reports sessionsFound on the image path as the RAW registry count, matching the plain path", async () => {
+    const store = fakeStore({
+      insertMessage: vi.fn(() => ({
+        id: "msg-1",
+        createdAt: "2026-06-27T20:00:00.000Z",
+        body: "look at this",
+        threadId: null,
+        conversationId: "dm_x",
+        metadata: null,
+        attachments: [{ id: "att-1", kind: "image" }],
+      })),
+    });
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A", status: "idle" }, { id: "sess-B", status: "offline" }]) },
+      inputRouter: {},
+      sendInput: vi.fn(),
+    });
+    // The attachment service has its OWN notion (sessionsTargeted = online only,
+    // and 0 on an early skip). sessionsFound must not inherit it.
+    mockDeliverImageAttachments.mockResolvedValue({ injected: true, sessionsTargeted: 1, sessionsDelivered: 1 });
+
+    const res = await deliverDirectMessageAwaited(
+      { store },
+      { from: "syl", to: "kerrigan", body: "look at this", role: "agent" },
+    );
+
+    expect(res.sessionsFound).toBe(2);
+    expect(res.deliveredToSessions).toBe(1);
+  });
+
+  it("distinguishes the two zero cases on the image path too", async () => {
+    const withAttachment = () =>
+      fakeStore({
+        insertMessage: vi.fn(() => ({
+          id: "msg-1",
+          createdAt: "2026-06-27T20:00:00.000Z",
+          body: "look",
+          threadId: null,
+          conversationId: "dm_x",
+          metadata: null,
+          attachments: [{ id: "att-1", kind: "image" }],
+        })),
+      });
+
+    // Sessions exist, delivery failed.
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => [{ id: "sess-A", status: "idle" }]) },
+      inputRouter: {},
+      sendInput: vi.fn(),
+    });
+    mockDeliverImageAttachments.mockResolvedValue({ injected: false, sessionsTargeted: 1, sessionsDelivered: 0 });
+    const failed = await deliverDirectMessageAwaited(
+      { store: withAttachment() },
+      { from: "syl", to: "kerrigan", body: "look", role: "agent" },
+    );
+
+    // Nobody by that name.
+    mockGetSessionBridge.mockReturnValue({
+      registry: { findByName: vi.fn(() => []) },
+      inputRouter: {},
+      sendInput: vi.fn(),
+    });
+    mockDeliverImageAttachments.mockResolvedValue({ injected: false, sessionsTargeted: 0, sessionsDelivered: 0 });
+    const absent = await deliverDirectMessageAwaited(
+      { store: withAttachment() },
+      { from: "syl", to: "ghost", body: "look", role: "agent" },
+    );
+
+    expect(failed.deliveredToSessions).toBe(0);
+    expect(absent.deliveredToSessions).toBe(0);
+    expect(failed.sessionsFound).toBe(1);
+    expect(absent.sessionsFound).toBe(0);
   });
 
   it("reports 0 when the image-attachment leg reaches no session", async () => {
