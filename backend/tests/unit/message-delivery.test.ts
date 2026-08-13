@@ -91,7 +91,8 @@ describe("message-delivery", () => {
     // Wait for async delivery
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent", sessionCreatedAt);
+    // Cutoff is a Date (the recent session createdAt, or the lifecycle floor if the session is old).
+    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent", expect.any(Date));
     expect(mockBridge.sendInput).toHaveBeenCalledTimes(2);
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Hello agent");
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Second message");
@@ -161,7 +162,8 @@ describe("message-delivery", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     // Should use earliest session createdAt for filtering
-    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent", sessionCreatedAt);
+    // Cutoff is a Date (the recent session createdAt, or the lifecycle floor if the session is old).
+    expect(store.getPendingForRecipient).toHaveBeenCalledWith("test-agent", expect.any(Date));
     expect(mockBridge.sendInput).toHaveBeenCalledTimes(2);
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-1", "Hello");
     expect(mockBridge.sendInput).toHaveBeenCalledWith("session-2", "Hello");
@@ -190,7 +192,8 @@ describe("message-delivery", () => {
     const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
     initMessageDelivery(store, mockState);
 
-    const sessionCreatedAt = new Date("2026-03-13T12:00:00Z");
+    // Recent session (within the lifecycle window) — the fallback returns it unclamped.
+    const sessionCreatedAt = new Date(Date.now() - 60_000);
     mockState.getAgentProfile.mockReturnValue(null);
 
     store.getPendingForRecipient.mockReturnValue([]);
@@ -250,7 +253,8 @@ describe("message-delivery", () => {
     const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
     initMessageDelivery(store, mockState);
 
-    const sessionCreatedAt = new Date("2026-03-13T12:00:00Z");
+    // Recent session (within the lifecycle window) — the fallback returns it unclamped.
+    const sessionCreatedAt = new Date(Date.now() - 60_000);
 
     // Profile exists but disconnectedAt is null (first-time agent)
     mockState.getAgentProfile.mockReturnValue({
@@ -272,5 +276,29 @@ describe("message-delivery", () => {
 
     // No disconnectedAt → falls back to session createdAt
     expect(store.getPendingForRecipient).toHaveBeenCalledWith("nova", sessionCreatedAt);
+  });
+
+  it("clamps the stale spawn-time fallback so a restart does NOT replay the whole history (adj-fl00d)", async () => {
+    const { initMessageDelivery } = await import("../../src/services/message-delivery.js");
+    initMessageDelivery(store, mockState);
+
+    // The exact flood condition: a restart wiped in-memory state (no disconnectedAt) AND the
+    // agent was spawned long ago — so the fallback would use the ancient spawn time and replay
+    // the entire pending backlog into tmux.
+    const ancientSpawn = new Date("2026-03-13T10:00:00Z");
+    mockState.getAgentProfile.mockReturnValue(null);
+    store.getPendingForRecipient.mockReturnValue([]);
+    mockBridge.registry.findByName.mockReturnValue([
+      { id: "session-1", status: "idle", createdAt: ancientSpawn },
+    ]);
+
+    const handler = handlers.get("mcp:agent_connected")!;
+    await handler({ agentId: "raynor", sessionId: "mcp-session-1" });
+    await new Promise((r) => setTimeout(r, 50));
+
+    // The cutoff must be clamped to ~this lifecycle's start, NOT the months-old spawn time.
+    const cutoff = store.getPendingForRecipient.mock.calls[0]![1] as Date;
+    expect(cutoff.getTime()).toBeGreaterThan(ancientSpawn.getTime() + 24 * 60 * 60 * 1000);
+    expect(cutoff.getTime()).toBeGreaterThan(Date.now() - 5 * 60 * 1000);
   });
 });
