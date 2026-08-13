@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import type Database from "better-sqlite3";
 import type { MessageStore } from "../../src/services/message-store.js";
 import type { EventStore } from "../../src/services/event-store.js";
+import type { RecipientResolver } from "../../src/services/agent-recipient-resolver.js";
 
 vi.mock("../../src/utils/index.js", () => ({
   logInfo: vi.fn(),
@@ -80,7 +81,10 @@ interface Registered {
  * `tool(name, description, schema, cb)` — the description is what a model reads to
  * decide what a verb means, so this test needs to see it.
  */
-async function registerTools(eventStore?: unknown): Promise<Map<string, Registered>> {
+async function registerTools(
+  eventStore?: unknown,
+  opts?: { resolveRecipient?: RecipientResolver },
+): Promise<Map<string, Registered>> {
   const { registerMessagingTools } = await import("../../src/services/mcp-tools/messaging.js");
   const tools = new Map<string, Registered>();
   const mockServer = {
@@ -92,8 +96,20 @@ async function registerTools(eventStore?: unknown): Promise<Map<string, Register
       tools.set(name, { description, schema, handler });
     },
   } as unknown as Parameters<typeof registerMessagingTools>[0];
-  registerMessagingTools(mockServer, store, eventStore as EventStore | undefined);
+  registerMessagingTools(mockServer, store, eventStore as EventStore | undefined, undefined, opts);
   return tools;
+}
+
+/** A resolver over a fixed roster, using the real matching rule. */
+function resolverOver(...names: string[]): RecipientResolver {
+  return async (spoken: string) => {
+    const { resolveAgentName } = await import("../../src/services/bridge-agent-resolver.js");
+    if (names.length === 0) return { status: "roster-unavailable", candidates: [] };
+    const r = resolveAgentName(spoken, names.map((n) => ({ id: n, name: n })));
+    return r.matched && r.canonical
+      ? { status: "resolved", canonical: r.canonical, candidates: [] }
+      : { status: "unknown", candidates: r.candidates };
+  };
 }
 
 function bridgeWith(sessions: { id: string; status?: string }[], sendInput: ReturnType<typeof vi.fn>) {
@@ -154,6 +170,9 @@ describe("direct_message MCP tool", () => {
     // A field the model is not told how to read is a field it will not read. The
     // description must explain what sessionsFound separates, not merely name it.
     expect(lowered).toContain("sessionsfound");
+    // syl-j8fa.7: a rejected name and a zero delivery are different outcomes, and the
+    // model has to know which one it is looking at.
+    expect(lowered).toContain("rejected");
   });
 
   it("injects into a live recipient session and reports the count it actually reached", async () => {
@@ -368,6 +387,158 @@ describe("direct_message MCP tool", () => {
     expect(eventStore.insertEvent).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "message_sent", agentId: "syl" }),
     );
+  });
+});
+
+// ============================================================================
+// Recipient validation (syl-j8fa.7).
+//
+// An unresolvable name used to persist a message to a phantom recipient and come
+// back as deliveredToSessions 0 — indistinguishable from a real agent who is not
+// running. Routing `to` through the SAME resolver the Bridge path uses makes an
+// unknown name fail as itself.
+//
+// THE TRAP, and it is the reason this is not simply "validate the name": a
+// REGISTERED agent with no live session must remain a SUCCESS with
+// deliveredToSessions 0. The reply path depends on a message being persisted for
+// an agent who is not running yet, so a stricter door here would quietly close the
+// door the next task needs open.
+// ============================================================================
+
+describe("direct_message recipient validation", () => {
+  it("delivers as before when the name is an exact registered agent", async () => {
+    const sendInput = vi.fn().mockResolvedValue(true);
+    mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }], sendInput));
+
+    const tools = await registerTools(undefined, { resolveRecipient: resolverOver("kerrigan", "raynor") });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "kerrigan", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    expect(data["error"]).toBeUndefined();
+    expect(data["deliveredToSessions"]).toBe(1);
+    expect(store.getMessage(String(data["messageId"]))!.recipient).toBe("kerrigan");
+  });
+
+  it("delivers to the CANONICAL name when the caller uses a resolvable variant", async () => {
+    const sendInput = vi.fn().mockResolvedValue(true);
+    const findByName = vi.fn(() => [{ id: "sess-A" }]);
+    mockGetSessionBridge.mockReturnValue({ registry: { findByName }, inputRouter: {}, sendInput });
+
+    const tools = await registerTools(undefined, { resolveRecipient: resolverOver("fenix", "kerrigan") });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "Phoenix", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    // Persisted under the canonical name, and the session lookup used it too —
+    // otherwise the message lands in a conversation nobody is reading.
+    expect(store.getMessage(String(data["messageId"]))!.recipient).toBe("fenix");
+    expect(findByName).toHaveBeenCalledWith("fenix");
+  });
+
+  it("rejects a name that matches nothing, persisting NOTHING", async () => {
+    const sendInput = vi.fn().mockResolvedValue(true);
+    mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }], sendInput));
+
+    const tools = await registerTools(undefined, { resolveRecipient: resolverOver("kerrigan", "raynor") });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "nobody-at-all", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    expect(String(data["error"])).toContain("nobody-at-all");
+    expect(data["messageId"]).toBeUndefined();
+    expect(data["deliveredToSessions"]).toBeUndefined();
+    expect(store.getMessages({ limit: 50 })).toHaveLength(0);
+    expect(sendInput).not.toHaveBeenCalled();
+    expect(mockWsBroadcast).not.toHaveBeenCalled();
+  });
+
+  it("rejects an ambiguous near-miss and names the candidates it could have meant", async () => {
+    const tools = await registerTools(undefined, { resolveRecipient: resolverOver("alpha", "alphb") });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "alphc", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    const error = String(data["error"]);
+    expect(error).toContain("alphc");
+    expect(error).toContain("alpha");
+    expect(error).toContain("alphb");
+    expect(store.getMessages({ limit: 50 })).toHaveLength(0);
+  });
+
+  // THE TRAP.
+  it("still SUCCEEDS for a registered agent with no live session — the reply path needs this", async () => {
+    // Registered on the roster, but the session registry has nothing for them.
+    mockGetSessionBridge.mockReturnValue(bridgeWith([], vi.fn()));
+
+    const tools = await registerTools(undefined, { resolveRecipient: resolverOver("kerrigan", "raynor") });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "kerrigan", body: "for when you wake up" }, { sessionId: "mcp-1" }),
+    );
+
+    expect(data["error"]).toBeUndefined();
+    expect(data["deliveredToSessions"]).toBe(0);
+    expect(data["sessionsFound"]).toBe(0);
+    // Persisted, so the exchange exists and a reply has somewhere to land.
+    const stored = store.getMessage(String(data["messageId"]));
+    expect(stored).not.toBeNull();
+    expect(stored!.body).toBe("for when you wake up");
+    expect(stored!.recipient).toBe("kerrigan");
+  });
+
+  // "I could not read the roster" is not "that name is wrong". Blaming the sender for
+  // an outage is the same class of false report this epic exists to close.
+  it("delivers anyway when the roster cannot be read, rather than blaming the name", async () => {
+    const sendInput = vi.fn().mockResolvedValue(true);
+    mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }], sendInput));
+
+    const tools = await registerTools(undefined, {
+      resolveRecipient: async () => ({ status: "roster-unavailable", candidates: [] }),
+    });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "kerrigan", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    expect(data["error"]).toBeUndefined();
+    expect(data["deliveredToSessions"]).toBe(1);
+    expect(store.getMessage(String(data["messageId"]))!.recipient).toBe("kerrigan");
+  });
+
+  it("resolves nothing and delivers as before when no resolver is wired at all", async () => {
+    const sendInput = vi.fn().mockResolvedValue(true);
+    mockGetSessionBridge.mockReturnValue(bridgeWith([{ id: "sess-A" }], sendInput));
+
+    const tools = await registerTools(); // no opts
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "whoever", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    expect(data["error"]).toBeUndefined();
+    expect(data["deliveredToSessions"]).toBe(1);
+  });
+
+  it("rejects to:'user' BEFORE attempting resolution", async () => {
+    const resolveRecipient = vi.fn(resolverOver("kerrigan"));
+    const tools = await registerTools(undefined, { resolveRecipient });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "user", body: "hi" }, { sessionId: "mcp-1" }),
+    );
+
+    expect(String(data["error"])).toContain("send_message");
+    // "user" is not an agent name and must never be looked up as one.
+    expect(resolveRecipient).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown session BEFORE attempting resolution", async () => {
+    mockGetAgentBySession.mockReturnValue(undefined);
+    const resolveRecipient = vi.fn(resolverOver("kerrigan"));
+    const tools = await registerTools(undefined, { resolveRecipient });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "kerrigan", body: "go" }, { sessionId: "nope" }),
+    );
+
+    expect(data["error"]).toBe("Unknown session");
+    expect(resolveRecipient).not.toHaveBeenCalled();
   });
 });
 

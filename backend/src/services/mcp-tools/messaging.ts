@@ -14,6 +14,7 @@ import { deliverChannelPostToAgents } from "../channel-delivery.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { isAPNsConfigured, sendNotificationToAll } from "../apns-service.js";
 import { deliverDirectMessageAwaited } from "../direct-message-delivery.js";
+import type { RecipientResolver } from "../agent-recipient-resolver.js";
 import { logInfo, logWarn } from "../../utils/index.js";
 import type { EventStore } from "../event-store.js";
 import type { ConversationStore } from "../conversation-store.js";
@@ -56,6 +57,10 @@ const DIRECT_MESSAGE_DESCRIPTION = [
   "",
   "Recipients are agent names only. To message the Commander (to: 'user' or 'mayor/'), use",
   "send_message instead — that direction carries the phone push and has its own handler.",
+  "",
+  "A name that does not match a registered agent is REJECTED: you get an error naming the",
+  "agent you asked for, nothing is stored, and nothing is sent. That is different from a",
+  "delivery of 0, which means the agent is real. Fix the name and try again.",
 ].join("\n");
 
 /**
@@ -65,11 +70,25 @@ const DIRECT_MESSAGE_DESCRIPTION = [
  *   routes the message into that conversation (channel post) with room-scoped
  *   fan-out instead of the legacy global broadcast.
  */
+export interface MessagingToolOptions {
+  /**
+   * Resolves a recipient name against the live agent roster (syl-j8fa.7). When wired,
+   * `direct_message` rejects a name that resolves to nothing instead of persisting a
+   * message to a phantom recipient. Injected rather than imported so this module stays
+   * testable without a live roster — and so the ONE resolver the Bridge path already
+   * uses is the one that runs here.
+   *
+   * Absent ⇒ no validation, i.e. the pre-syl-j8fa.7 behaviour.
+   */
+  resolveRecipient?: RecipientResolver;
+}
+
 export function registerMessagingTools(
   server: McpServer,
   store: MessageStore,
   eventStore?: EventStore,
   conversationStore?: ConversationStore,
+  options?: MessagingToolOptions,
 ): void {
   // ========================================================================
   // send_message
@@ -306,11 +325,45 @@ export function registerMessagingTools(
         };
       }
 
+      // syl-j8fa.7: resolve the name against the roster through the SAME resolver the
+      // Bridge path uses. An unresolvable name used to persist a message to a phantom
+      // recipient and come back as a 0 delivery, indistinguishable from a real agent
+      // who is simply not running.
+      //
+      // A roster we could not READ is deliberately NOT a rejection: "I checked and that
+      // name is not on it" is the sender's mistake, "I could not check" is ours, and
+      // blaming the sender for an outage is the same false report this tool exists to
+      // stop. In that case the name is used as given, which is the pre-validation
+      // behaviour.
+      let recipient = to;
+      if (options?.resolveRecipient) {
+        const resolution = await options.resolveRecipient(to);
+        if (resolution.status === "unknown") {
+          const hint = resolution.candidates.length
+            ? ` Did you mean: ${resolution.candidates.join(", ")}?`
+            : "";
+          logWarn("MCP direct_message rejected: unresolvable recipient", { agentId, to });
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: `No agent named "${to}".${hint} Nothing was sent — no message was stored.`,
+                }),
+              },
+            ],
+          };
+        }
+        if (resolution.status === "resolved" && resolution.canonical) {
+          recipient = resolution.canonical;
+        }
+      }
+
       const result = await deliverDirectMessageAwaited(
         { store, ...(eventStore !== undefined ? { eventStore } : {}) },
         {
           from: agentId,
-          to,
+          to: recipient,
           body,
           role: "agent",
           emitEvent: true,
@@ -322,7 +375,7 @@ export function registerMessagingTools(
 
       logInfo("MCP direct_message", {
         agentId,
-        to,
+        to: recipient,
         messageId: result.messageId,
         deliveredToSessions: result.deliveredToSessions,
         sessionsFound: result.sessionsFound,
