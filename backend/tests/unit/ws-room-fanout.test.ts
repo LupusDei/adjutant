@@ -251,6 +251,9 @@ describe("ws-server room-scoped fan-out", () => {
       // chan-1 has only raynor; the connecting client identifies as a DIFFERENT
       // agent. Agents remain strictly membership-gated (fail-closed) — only the
       // operator carries the adj-egziw oversight exemption below.
+      // Also pins adj-6fg1g: the Bridge gained a PULL-based read path into channels
+      // it is not a member of (a coordinator-only tool surface). That must never
+      // become a live fan-out exemption for ordinary agents.
       mod.setConversationStore(makeConversationStore({ "chan-1": ["raynor"] }) as never);
 
       const nonMember = connectAuthed("zeratul");
@@ -384,6 +387,8 @@ describe("ws-server room-scoped fan-out", () => {
 
       // A DIFFERENT client (the non-member agent) connects fresh and asks to
       // sync from the beginning. It must not receive the channel body.
+      // (adj-6fg1g regression: the Bridge's non-member channel READ path must not
+      // widen the sync/replay boundary for agents — adj-2jy4u stays closed.)
       const nonMember = connectAuthed("zeratul");
       nonMember._receiveMessage({ type: "sync", lastSeqSeen: 0 });
 

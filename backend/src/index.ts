@@ -253,6 +253,10 @@ const bridgeToolBridge = createBridgeToolBridge({
   // adj-ni4dh — recent fleet activity: the avatar reads the SAME timeline the Timeline
   // tab renders so it can summarize what's been happening across the fleet.
   eventStore,
+  // adj-6fg1g — the avatar DISCOVERS and READS multi-agent channels (list_channels +
+  // read_messages({ channel })) through the SAME conversation store the REST/MCP channel
+  // surfaces use. Read-only: no channel is created, joined, or posted to from here.
+  conversationStore,
 });
 // Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
 // spoken status question resolves to real fleet data instead of stalling on "querying…".
