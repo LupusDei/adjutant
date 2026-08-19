@@ -32,6 +32,7 @@ import { execBd, resolveBeadsDir, type BeadsIssue } from "./bd-client.js";
 import { buildAutoDevelopStatus } from "./auto-develop-status.js";
 import { resolveAgentName } from "./bridge-agent-resolver.js";
 import type { MessageStore } from "./message-store.js";
+import type { ChannelSummary, ConversationStore } from "./conversation-store.js";
 import type { ProposalStore } from "./proposal-store.js";
 import type { AutoDevelopStore } from "./auto-develop-store.js";
 import type { QuestionService } from "./question-service.js";
@@ -52,6 +53,7 @@ export const BRIDGE_READONLY_TOOLS = [
   "read_messages",
   "query_memories",
   "list_projects",
+  "list_channels",
 ] as const;
 
 export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
@@ -76,6 +78,12 @@ export interface BridgeToolDeps {
   // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections across
   // sessions by querying the SAME memory store the MCP query_memories tool reads.
   memoryStore: Pick<MemoryStore, "searchLearnings" | "queryLearnings">;
+  // adj-6fg1g — the avatar DISCOVERS channels by name and reads one by name. Reads are
+  // deliberately NOT membership-gated: the Bridge speaks as the Layer-2 coordinator and is a
+  // non-member OBSERVER of most channels (a channel shared by several agents is exactly that
+  // case). This mirrors the adj-egziw operator exemption and stays read-only — the WS fan-out
+  // gate that keeps non-member AGENTS out of channel traffic (adj-2jy4u) is untouched.
+  conversationStore: Pick<ConversationStore, "listChannels" | "getMembers">;
 }
 
 export interface BridgeToolRequest {
@@ -158,8 +166,14 @@ const READ_MESSAGES_BODY_MAX = 300;
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
   conversationId: z.string().min(1).optional(),
+  /** A channel NAME (or, tolerated, its id) — resolved to a conversation id (adj-6fg1g). */
+  channel: z.string().min(1).optional(),
   limit: z.number().int().positive().optional(),
 });
+
+// The avatar only needs enough channels to NAME one; the RPC payload ceiling does the rest.
+// The per-channel member lookup below is bounded by this cap (<= 15 indexed SQLite reads).
+const LIST_CHANNELS_MAX = 15;
 
 // query_memories — the memory categories mirror the MCP memory tool's enum.
 const MEMORY_CATEGORY_ENUM = z.enum(["operational", "technical", "coordination", "project"]);
@@ -280,6 +294,8 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
           return runQueryMemories(deps, args, projectId);
         case "list_projects":
           return runListProjects(projectId);
+        case "list_channels":
+          return runListChannels(deps, projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
           return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
@@ -314,6 +330,7 @@ const TOOL_GET_AUTO_DEVELOP_STATUS: BridgeToolName = "get_auto_develop_status";
 const TOOL_READ_MESSAGES: BridgeToolName = "read_messages";
 const TOOL_QUERY_MEMORIES: BridgeToolName = "query_memories";
 const TOOL_LIST_PROJECTS: BridgeToolName = "list_projects";
+const TOOL_LIST_CHANNELS: BridgeToolName = "list_channels";
 
 /**
  * list_projects — the fleet-wide project roster (name + id) so the avatar can NAME which projects
@@ -585,6 +602,68 @@ function runGetAutoDevelopStatus(
 }
 
 /**
+ * Normalize a channel name for matching: case-folded, with every run of non-alphanumerics
+ * collapsed to a single "-". Voice input is the reason — the Commander says "fleet ops",
+ * the channel is titled "fleet-ops", and STT never agrees on punctuation.
+ */
+function normalizeChannelName(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The outcome of resolving a spoken channel name against the channel roster. */
+type ChannelMatch =
+  | { kind: "found"; id: string; title: string }
+  | { kind: "not_found"; available: string[] }
+  | { kind: "ambiguous"; matches: string[] };
+
+/**
+ * Resolve a spoken/typed channel reference to exactly ONE channel. An id is accepted (it is
+ * unique and free to check) but never required; otherwise the normalized title must match a
+ * single channel. A miss or a tie is an ERROR, never a guess: silently widening to an unscoped
+ * read would have the avatar narrate unrelated fleet traffic as if it were the channel.
+ */
+function resolveChannel(channels: readonly ChannelSummary[], raw: string): ChannelMatch {
+  const byId = channels.find((c) => c.id === raw.trim());
+  if (byId !== undefined) return { kind: "found", id: byId.id, title: byId.title ?? byId.id };
+
+  const wanted = normalizeChannelName(raw);
+  const matches = channels.filter((c) => normalizeChannelName(c.title ?? "") === wanted && wanted !== "");
+
+  if (matches.length === 1) {
+    const only = matches[0]!;
+    return { kind: "found", id: only.id, title: only.title ?? only.id };
+  }
+  if (matches.length > 1) return { kind: "ambiguous", matches: matches.map((c) => c.title ?? c.id) };
+  return { kind: "not_found", available: channels.map((c) => c.title ?? c.id) };
+}
+
+/**
+ * list_channels — the channel roster so the avatar can NAME a channel before reading it
+ * (adj-6fg1g). Without this the Bridge has no way to address a channel at all: read_messages
+ * could only widen to an agent's DM thread or fleet-wide traffic, so channels shared by
+ * several agents were invisible to it.
+ *
+ * REUSES conversationStore.listChannels — the SAME query the REST/MCP channel surfaces read
+ * (Constitution Rules 4 + 9). Members are resolved per channel so the avatar can say WHO is in
+ * the room; the roster is capped first, so this is at most LIST_CHANNELS_MAX indexed lookups
+ * and never scales with the number of channels in the fleet.
+ */
+function runListChannels(deps: BridgeToolDeps, projectId: string | null): BridgeToolResult {
+  const channels = deps.conversationStore.listChannels().slice(0, LIST_CHANNELS_MAX);
+  const data = channels.map((c) => ({
+    id: c.id,
+    title: c.title ?? c.id,
+    memberCount: c.memberCount,
+    members: deps.conversationStore.getMembers(c.id).map((m) => m.memberId),
+  }));
+  return ok(TOOL_LIST_CHANNELS, projectId, { channels: data, count: data.length });
+}
+
+/**
  * read_messages — let the avatar recall past agent/user communications so it can give the
  * Commander context on prior discussions (the gap the avatar flagged about itself, adj-202.11).
  * REUSES the SAME messageStore.getMessages the REST/MCP paths use — no new store.
@@ -606,11 +685,38 @@ async function runReadMessages(
 
   const limit = Math.min(parsed.data.limit ?? READ_MESSAGES_DEFAULT_LIMIT, READ_MESSAGES_MAX_LIMIT);
   const opts: { limit: number; agentId?: string; conversationId?: string } = { limit };
+  let channel: { id: string; title: string } | undefined;
 
-  // Resolve a spoken/typed agent name to the canonical id (case/alias/phonetic), mirroring
-  // get_agent_detail — so "Phoenix" filters to fenix's thread. An unresolvable name is a hard
-  // miss (don't silently widen to a fleet-wide read the Commander didn't ask for).
-  if (parsed.data.agentId !== undefined) {
+  // Scope precedence: an explicit conversationId (strictest) > a channel NAME > an agent thread.
+  // They are mutually exclusive on purpose — ANDing agentId onto a channel read would narrow the
+  // channel to a single sender and quietly hide the rest of the room from the avatar.
+  if (parsed.data.conversationId !== undefined) {
+    opts.conversationId = parsed.data.conversationId;
+  } else if (parsed.data.channel !== undefined) {
+    // adj-6fg1g — read a channel by NAME. No membership check: the Bridge observes channels it
+    // does not belong to (see the conversationStore dep note). Reads have never been
+    // membership-gated on any surface; the gate lives on the WS fan-out path and stays closed.
+    const match = resolveChannel(deps.conversationStore.listChannels(), parsed.data.channel);
+    if (match.kind === "ambiguous") {
+      return reject(
+        TOOL_READ_MESSAGES,
+        projectId,
+        "AMBIGUOUS_CHANNEL",
+        `More than one channel matches '${parsed.data.channel}': ${match.matches.join(", ")}. Ask which one.`,
+      );
+    }
+    if (match.kind === "not_found") {
+      const available = match.available.length > 0 ? match.available.join(", ") : "none";
+      return reject(
+        TOOL_READ_MESSAGES,
+        projectId,
+        "CHANNEL_NOT_FOUND",
+        `No channel named '${parsed.data.channel}'. Channels: ${available}.`,
+      );
+    }
+    channel = { id: match.id, title: match.title };
+    opts.conversationId = match.id;
+  } else if (parsed.data.agentId !== undefined) {
     // Resolve to a canonical LIVE-agent name when possible (Phoenix→fenix). But message HISTORY
     // is usually with agents that are NOT currently running (so not in getAgents()), so a
     // non-match is NOT an error — fall back to filtering by the provided name as-is (the store
@@ -620,9 +726,6 @@ async function runReadMessages(
     const resolution = resolveAgentName(parsed.data.agentId, allAgents.map((a) => ({ id: a.id, name: a.name })));
     opts.agentId = resolution.matched && resolution.canonical ? resolution.canonical : parsed.data.agentId;
   }
-
-  // conversationId takes precedence in the store (strict scoping); pass it through when given.
-  if (parsed.data.conversationId !== undefined) opts.conversationId = parsed.data.conversationId;
 
   const newestFirst = deps.messageStore.getMessages(opts);
   // Present oldest → newest for natural narration of the prior discussion.
@@ -640,11 +743,14 @@ async function runReadMessages(
       .slice(0, READ_MESSAGES_BODY_MAX);
   const messages = ordered.map((m) => ({
     from: m.agentId,
-    to: m.recipient ?? "",
+    // A channel post has no 1:1 recipient — name the CHANNEL instead, or the avatar narrates
+    // every post as having been said to nobody.
+    to: m.recipient ?? channel?.title ?? "",
     text: clean(m.body),
   }));
 
-  return ok(TOOL_READ_MESSAGES, projectId, { messages, count: messages.length });
+  const payload = { messages, count: messages.length };
+  return ok(TOOL_READ_MESSAGES, projectId, channel !== undefined ? { channel, ...payload } : payload);
 }
 
 /**

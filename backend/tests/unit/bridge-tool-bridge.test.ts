@@ -140,6 +140,10 @@ function makeDeps(overrides: Partial<BridgeToolDeps> = {}): BridgeToolDeps {
       searchLearnings: vi.fn().mockReturnValue([]),
       queryLearnings: vi.fn().mockReturnValue([]),
     } as unknown as BridgeToolDeps["memoryStore"],
+    conversationStore: {
+      listChannels: vi.fn().mockReturnValue([]),
+      getMembers: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["conversationStore"],
     ...overrides,
   };
 }
@@ -157,7 +161,7 @@ beforeEach(() => {
 // ============================================================================
 
 describe("createBridgeToolBridge — whitelist", () => {
-  it("exposes exactly the nine read-only tools", () => {
+  it("exposes exactly the ten read-only tools", () => {
     expect([...BRIDGE_READONLY_TOOLS].sort()).toEqual(
       [
         "get_agent_detail",
@@ -165,6 +169,7 @@ describe("createBridgeToolBridge — whitelist", () => {
         "get_project_state",
         "list_agents",
         "list_beads",
+        "list_channels",
         "list_projects",
         "list_questions",
         "read_messages",
@@ -918,5 +923,266 @@ describe("query_memories", () => {
       expect(data.memories).toEqual([]);
       expect(data.count).toBe(0);
     }
+  });
+});
+
+// ============================================================================
+// list_channels + channel reads (adj-6fg1g)
+//
+// The Bridge speaks as the coordinator and is a NON-MEMBER observer of most
+// channels (channels shared by multiple agents are exactly that case). Its read
+// surface must therefore (a) let it DISCOVER channels by name and (b) scope a
+// read to one channel WITHOUT a membership check — mirroring the adj-egziw
+// operator exemption. The membership gate that keeps non-member AGENTS out lives
+// on the WS fan-out path (ws-server) and is untouched by this surface.
+// ============================================================================
+
+const CHANNELS = [
+  {
+    id: "conv_ops",
+    kind: "channel",
+    title: "fleet-ops",
+    archived: false,
+    createdAt: "2026-08-01T00:00:00Z",
+    updatedAt: "2026-08-02T00:00:00Z",
+    memberCount: 3,
+  },
+  {
+    id: "conv_rev",
+    kind: "channel",
+    title: "code-review",
+    archived: false,
+    createdAt: "2026-07-01T00:00:00Z",
+    updatedAt: "2026-07-02T00:00:00Z",
+    memberCount: 2,
+  },
+];
+
+function makeConversationStore(overrides: Record<string, unknown> = {}) {
+  return {
+    listChannels: vi.fn().mockReturnValue(CHANNELS),
+    getMembers: vi.fn().mockReturnValue([
+      { conversationId: "conv_ops", memberId: "fenix", memberKind: "agent", role: "member" },
+      { conversationId: "conv_ops", memberId: "kerrigan", memberKind: "agent", role: "member" },
+      { conversationId: "conv_ops", memberId: "user", memberKind: "user", role: "owner" },
+    ]),
+    ...overrides,
+  } as unknown as BridgeToolDeps["conversationStore"];
+}
+
+describe("list_channels", () => {
+  it("lists channels by NAME with member counts and member names so the avatar can pick one", async () => {
+    const conversationStore = makeConversationStore();
+    const bridge = createBridgeToolBridge(makeDeps({ conversationStore }));
+
+    const res = await bridge.executeTool({ tool: "list_channels", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as {
+        channels: { id: string; title: string; memberCount: number; members: string[] }[];
+        count: number;
+      };
+      expect(data.count).toBe(2);
+      expect(data.channels.map((c) => c.title)).toEqual(["fleet-ops", "code-review"]);
+      expect(data.channels[0]!.memberCount).toBe(3);
+      expect(data.channels[0]!.members).toEqual(["fenix", "kerrigan", "user"]);
+    }
+  });
+
+  it("returns an empty result (count 0) when no channels exist", async () => {
+    const conversationStore = makeConversationStore({ listChannels: vi.fn().mockReturnValue([]) });
+    const bridge = createBridgeToolBridge(makeDeps({ conversationStore }));
+
+    const res = await bridge.executeTool({ tool: "list_channels", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { channels: unknown[]; count: number };
+      expect(data.channels).toEqual([]);
+      expect(data.count).toBe(0);
+    }
+  });
+
+  it("caps the channel list so the batch stays under the LiveKit RPC payload ceiling", async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      id: `conv_${i}`,
+      kind: "channel",
+      title: `channel-${i}`,
+      archived: false,
+      createdAt: "2026-08-01T00:00:00Z",
+      updatedAt: "2026-08-01T00:00:00Z",
+      memberCount: 2,
+    }));
+    const conversationStore = makeConversationStore({ listChannels: vi.fn().mockReturnValue(many) });
+    const bridge = createBridgeToolBridge(makeDeps({ conversationStore }));
+
+    const res = await bridge.executeTool({ tool: "list_channels", args: {} });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { channels: unknown[]; count: number };
+      expect(data.channels.length).toBe(15);
+      expect(data.count).toBe(15);
+    }
+  });
+});
+
+describe("read_messages — channel scoping (adj-6fg1g)", () => {
+  const CHANNEL_MESSAGES = [
+    // Store returns newest-first. Channel posts have NO recipient (fan-out, not 1:1).
+    {
+      id: "c2", agentId: "kerrigan", recipient: null, role: "agent",
+      body: "Race condition reproduced", conversationId: "conv_ops", createdAt: "2026-08-18T02:00:00Z",
+    },
+    {
+      id: "c1", agentId: "fenix", recipient: null, role: "agent",
+      body: "Deploying the map view", conversationId: "conv_ops", createdAt: "2026-08-18T01:00:00Z",
+    },
+  ];
+
+  function makeMessageStore(getMessages = vi.fn().mockReturnValue(CHANNEL_MESSAGES)) {
+    return {
+      store: {
+        getMessages,
+        getUnreadCounts: vi.fn().mockReturnValue([]),
+      } as unknown as BridgeToolDeps["messageStore"],
+      getMessages,
+    };
+  }
+
+  it("resolves a channel NAME to its conversation and scopes the read to it", async () => {
+    const { store, getMessages } = makeMessageStore();
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: store, conversationStore: makeConversationStore() }),
+    );
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { channel: "fleet-ops" } });
+
+    expect(res.ok).toBe(true);
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "conv_ops" }));
+    if (res.ok) {
+      const data = res.data as {
+        channel: { id: string; title: string };
+        messages: { from: string; to: string; text: string }[];
+        count: number;
+      };
+      expect(data.channel).toEqual({ id: "conv_ops", title: "fleet-ops" });
+      // Oldest → newest for narration; a channel post has no 1:1 recipient, so `to`
+      // names the CHANNEL (an empty `to` reads as "said to nobody" to the avatar).
+      expect(data.messages).toEqual([
+        { from: "fenix", to: "fleet-ops", text: "Deploying the map view" },
+        { from: "kerrigan", to: "fleet-ops", text: "Race condition reproduced" },
+      ]);
+      expect(data.count).toBe(2);
+    }
+  });
+
+  it("reads a MULTI-AGENT channel the Bridge is NOT a member of (no membership gate on this surface)", async () => {
+    const { store, getMessages } = makeMessageStore();
+    // Members are fenix/kerrigan/user — the coordinator (adjutant-coordinator) is absent.
+    const conversationStore = makeConversationStore();
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore: store, conversationStore }));
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { channel: "fleet-ops" } });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { count: number };
+      expect(data.count).toBe(2);
+    }
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "conv_ops" }));
+  });
+
+  it("matches a channel name case-insensitively and tolerates spoken spacing (voice input)", async () => {
+    const { store, getMessages } = makeMessageStore();
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: store, conversationStore: makeConversationStore() }),
+    );
+
+    for (const spoken of ["Fleet-Ops", "  fleet-ops  ", "fleet ops"]) {
+      getMessages.mockClear();
+      const res = await bridge.executeTool({ tool: "read_messages", args: { channel: spoken } });
+      expect(res.ok).toBe(true);
+      expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "conv_ops" }));
+    }
+  });
+
+  it("accepts a channel id directly (id is never required, but must not break when given)", async () => {
+    const { store, getMessages } = makeMessageStore();
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: store, conversationStore: makeConversationStore() }),
+    );
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { channel: "conv_ops" } });
+
+    expect(res.ok).toBe(true);
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "conv_ops" }));
+  });
+
+  it("rejects an unknown channel with CHANNEL_NOT_FOUND instead of silently widening fleet-wide", async () => {
+    const { store, getMessages } = makeMessageStore();
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: store, conversationStore: makeConversationStore() }),
+    );
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { channel: "does-not-exist" } });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.code).toBe("CHANNEL_NOT_FOUND");
+      // The avatar must be able to say WHICH channels exist so the Commander can pick.
+      expect(res.error.message).toContain("fleet-ops");
+    }
+    // A miss must never fall back to an unscoped read — that would make the avatar
+    // narrate unrelated fleet traffic as if it were the channel.
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it("rejects an AMBIGUOUS channel name rather than guessing", async () => {
+    const dupes = [
+      { ...CHANNELS[0]!, id: "conv_a", title: "ops" },
+      { ...CHANNELS[0]!, id: "conv_b", title: "OPS" },
+    ];
+    const { store, getMessages } = makeMessageStore();
+    const conversationStore = makeConversationStore({ listChannels: vi.fn().mockReturnValue(dupes) });
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore: store, conversationStore }));
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { channel: "ops" } });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("AMBIGUOUS_CHANNEL");
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it("lets an explicit conversationId win over channel, and channel win over agentId", async () => {
+    const { store, getMessages } = makeMessageStore();
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: store, conversationStore: makeConversationStore() }),
+    );
+
+    await bridge.executeTool({
+      tool: "read_messages",
+      args: { conversationId: "dm_explicit", channel: "fleet-ops", agentId: "fenix" },
+    });
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "dm_explicit" }));
+
+    getMessages.mockClear();
+    await bridge.executeTool({ tool: "read_messages", args: { channel: "fleet-ops", agentId: "fenix" } });
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBe("conv_ops");
+    // agentId must NOT also be applied — it would AND-narrow the channel read to one sender.
+    expect(opts["agentId"]).toBeUndefined();
+  });
+
+  it("caps a channel read at the RPC-safe limit like every other read", async () => {
+    const { store, getMessages } = makeMessageStore();
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: store, conversationStore: makeConversationStore() }),
+    );
+
+    await bridge.executeTool({ tool: "read_messages", args: { channel: "fleet-ops", limit: 500 } });
+
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
   });
 });

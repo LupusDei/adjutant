@@ -129,11 +129,20 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
   },
   {
     type: "backend_rpc",
+    name: "list_channels",
+    description:
+      "List the fleet's CHANNELS by name — the shared rooms where several agents talk to each other — with who is in each one. Call this when the Commander asks about a channel or about cross-agent discussion, then pass a returned NAME to read_messages({ channel }) to read what was said in it. No ids needed.",
+    parameters: [],
+    timeoutSeconds: 8,
+  },
+  {
+    type: "backend_rpc",
     name: "read_messages",
     description:
-      "Read recent agent/user messages to RECALL what was said earlier. You NEVER need a conversation id or any other id — to read a specific agent's thread just pass that agent's NAME in agentId (e.g. \"fenix\"); to read fleet-wide recent traffic, omit everything. The lookup resolves the conversation for you. The structured result is the source of truth.",
+      "Read recent agent/user messages to RECALL what was said earlier. You NEVER need a conversation id or any other id — pass an agent's NAME in agentId (e.g. \"fenix\") for that agent's thread, or a channel's NAME in channel (e.g. \"fleet-ops\") to read a shared multi-agent channel; omit everything for fleet-wide recent traffic. Use list_channels first if you don't know the channel name. The lookup resolves the conversation for you. The structured result is the source of truth.",
     parameters: [
       { name: "agentId", type: "string", description: "Optional agent NAME (e.g. \"fenix\"). This is all you need to read one agent's thread — no id required." },
+      { name: "channel", type: "string", description: "Optional channel NAME (e.g. \"fleet-ops\") to read a shared multi-agent channel — no id required. Use list_channels to discover names." },
       { name: "limit", type: "number", description: "Optional max messages to return (default 10, capped at 15)." },
     ],
     timeoutSeconds: 8,
@@ -286,7 +295,8 @@ You can query live fleet state using these read-only tools. CALL the matching to
 - get_project_state — a snapshot of a project. Pass a project NAME in the project argument to target one; omit for the default.
 - get_auto_develop_status — the auto-develop loop status for a project. Pass a project NAME in the project argument; omit for the default.
 CROSS-PROJECT RULE: you coordinate the WHOLE fleet. When the Commander names a project, look it up by NAME — never say you can only see one project, and never ask for a project id.
-- read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread; otherwise it reads recent fleet-wide. The structured result is the source of truth.
+- read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread, or a channel NAME to read a shared multi-agent channel; otherwise it reads recent fleet-wide. The structured result is the source of truth.
+- list_channels — the shared rooms where several agents talk to each other. Use it when the Commander asks about a channel or about cross-agent discussion, then read that channel by NAME with read_messages({ channel }). You are NOT a member of most channels — you observe them, so read freely.
 - query_memories — RECALL what you've LEARNED across sessions: the Commander's stated preferences, past decisions, recorded corrections, and fleet patterns. The structured result is the source of truth.
 
 After a tool returns, narrate its STRUCTURED result faithfully and conversationally. The returned data is the source of truth. If a tool reports it needs a project and none is selected, say so plainly and ask the Commander to select one. Keep answers brief and grounded. An agent can be idle (no live session) yet still own in-progress work — so if list_agents shows no "active" agents, that does NOT mean nobody has work; call get_agent_detail for whoever the Commander asks about to report their assigned beads.

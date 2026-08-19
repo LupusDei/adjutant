@@ -259,6 +259,23 @@ describe("ws-server room-scoped fan-out", () => {
       expect(nonMember.findAllSent("chat_message").some((m) => m.id === "leak")).toBe(false);
     });
 
+    it("should NOT deliver to a non-member AGENT even when the Bridge can read that channel (adj-6fg1g)", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      // A channel shared by two agents. `zeratul` is neither a member nor the operator.
+      mod.setConversationStore(makeConversationStore({ "chan-1": ["fenix", "kerrigan"] }) as never);
+
+      const outsiderAgent = connectAuthed("zeratul");
+      outsiderAgent._receiveMessage({ type: "subscribe", conversationId: "chan-1" });
+
+      mod.wsBroadcastToConversation("chan-1", { type: "chat_message", id: "leak-agent", body: "secret" });
+
+      // adj-6fg1g gave the BRIDGE a read path into non-member channels (a coordinator-only,
+      // pull-based tool surface). That must not become a live fan-out exemption for ordinary
+      // agents — the adj-2jy4u sync-replay leak stays closed for every non-member agent.
+      expect(outsiderAgent.findAllSent("chat_message").some((m) => m.id === "leak-agent")).toBe(false);
+    });
+
     it("should not deliver a channel post to a subscriber of a different conversation", async () => {
       const mod = await loadModule();
       mod.initWebSocketServer({} as import("http").Server);
@@ -341,6 +358,19 @@ describe("ws-server room-scoped fan-out", () => {
       expect(syncResp).toBeDefined();
       const missed = (syncResp!.missed ?? []) as Record<string, unknown>[];
       expect(missed.some((m) => m.id === "secret-body")).toBe(false);
+    });
+
+    it("should NOT replay a channel message to a non-member AGENT via sync (adj-6fg1g)", async () => {
+      const mod = await loadModule();
+      mod.initWebSocketServer({} as import("http").Server);
+      mod.setConversationStore(makeConversationStore({ "chan-1": ["fenix", "kerrigan"] }) as never);
+
+      mod.wsBroadcastToConversation("chan-1", { type: "chat_message", id: "hist-leak", body: "secret" });
+
+      const outsiderAgent = connectAuthed("zeratul");
+      outsiderAgent._receiveMessage({ type: "sync", lastSeq: 0 });
+
+      expect(outsiderAgent.findAllSent("chat_message").some((m) => m.id === "hist-leak")).toBe(false);
     });
 
     it("should still replay a channel message to a member via sync", async () => {

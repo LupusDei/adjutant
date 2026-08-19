@@ -216,6 +216,10 @@ const bridgeToolBridge = createBridgeToolBridge({
   // adj-202.6.1 — the avatar RECALLS prior learnings/preferences/corrections via the
   // SAME memory store the MCP query_memories tool and the rest of the system read.
   memoryStore,
+  // adj-6fg1g — the avatar DISCOVERS and READS multi-agent channels (list_channels +
+  // read_messages({ channel })) through the SAME conversation store the REST/MCP channel
+  // surfaces use. Read-only: no channel is created, joined, or posted to from here.
+  conversationStore,
 });
 // Dispatches the avatar's `backend_rpc` calls to the SAME read-only tool bridge, so a
 // spoken status question resolves to real fleet data instead of stalling on "querying…".
