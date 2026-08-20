@@ -11,7 +11,7 @@ if [[ "$BRANCH" == wip/* ]]; then
   exit 0
 fi
 
-echo "=== Step 1/4: Lint ==="
+echo "=== Step 1/5: Lint ==="
 # nice the lint step too — eslint (with type-aware rules) is a heavy multi-core
 # consumer, and concurrent agent lint runs are a top cause of CPU saturation.
 nice -n 10 npm run lint || { echo "FAILED: Lint errors found"; exit 1; }
@@ -21,7 +21,7 @@ nice -n 10 npm run lint || { echo "FAILED: Lint errors found"; exit 1; }
 # error — e.g. a contravariant function-arg mismatch (TS2322, see adj-181.3.8) —
 # would pass lint + tests here yet break `tsc` / `npm run build` at merge time.
 # Whole-project, not --changed: a change in one file can break types in another.
-echo "=== Step 2/4: Typecheck ==="
+echo "=== Step 2/5: Typecheck ==="
 # Backend typecheck is BLOCKING — backend is clean, and this closes the exact hole
 # that let adj-181.3.8 (TS2322 contravariance) pass verify yet break `npm run build`.
 ( cd backend && nice -n 10 npm run typecheck ) || { echo "FAILED: Backend typecheck (tsc --noEmit)"; exit 1; }
@@ -48,10 +48,21 @@ fi
 # Run tests at lowered priority (nice) so concurrent agent test runs yield to
 # interactive work and don't grind the machine to a halt. The worker pool is
 # also capped in the vitest configs (VITEST_MAX_WORKERS) to bound total CPU.
-echo "=== Step 3/4: Backend tests ==="
+echo "=== Step 3/5: Backend tests ==="
 cd backend && (nice -n 10 npx vitest run --changed HEAD~1 || nice -n 10 npx vitest run) || { echo "FAILED: Backend tests"; exit 1; }
 
-echo "=== Step 4/4: Frontend tests ==="
+echo "=== Step 4/5: Frontend tests ==="
 cd ../frontend && (nice -n 10 npx vitest run --changed HEAD~1 || nice -n 10 npx vitest run) || { echo "FAILED: Frontend tests"; exit 1; }
+
+# adj-mtzot step 3 — surface unpushed drift on `main` before it can be pushed or silently
+# deployed. Deliberately NON-BLOCKING: whoever is pushing a feature branch is usually not the
+# person who left main adrift, and failing their unrelated push would just train everyone to
+# bypass the gate. It is loud, it is last (so it is the thing still on screen), and it never
+# stops a legitimate push.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+echo "=== Step 5/5: Repo hygiene (main divergence) ==="
+if ! ./scripts/check-main-divergence.sh; then
+  echo "WARNING: main divergence detected (see above). This does NOT block your push."
+fi
 
 echo "=== All checks passed ==="

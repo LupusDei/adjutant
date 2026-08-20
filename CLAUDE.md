@@ -58,6 +58,19 @@ A standalone verification script exists at `scripts/verify-before-push.sh`. It r
 - **Frontend typecheck is a ratchet**: the frontend was never typechecked before and carries a baseline of pre-existing errors in `frontend/.tsc-baseline`. The gate blocks only on a *regression above the baseline*, so new type errors are caught without freezing the team on legacy debt. Burn the baseline down to 0 (adj-70idj), then drop the ratchet and make it plain-blocking like the backend.
 
 - **Agents MUST run `./scripts/verify-before-push.sh` before every `git push`** (enforced via spawn prompts, not git hooks)
+- **Step 5 is a non-blocking repo-hygiene alarm** (`scripts/check-main-divergence.sh`, adj-mtzot):
+  it fires when local `main` is AHEAD of `origin/main`. `main` should only ever fast-forward, so
+  anything ahead is unpushed drift — invisible to everyone, publishable by a stray `git push`, and
+  (because the live backend serves from the canonical checkout) a way for merged code to run
+  nowhere. It warns and never blocks: whoever is pushing a feature branch is rarely the person who
+  left main adrift, and failing their push would only teach people to bypass the gate.
+- **Run `./scripts/install-git-hooks.sh` after cloning and after any `bd init`** that regenerates
+  git hooks. It installs the worktree guard into `.git/hooks/post-checkout` ABOVE the
+  beads-managed markers. Hooks are not version-controlled and `bd` rewrites everything between its
+  own BEGIN/END lines, so a guard placed inside that block is silently deleted on the next
+  regeneration — which is how it went missing before. The guard makes the hook a no-op inside a
+  linked worktree (`.git` is a file there, a directory in the canonical repo), because dolt panics
+  on concurrent access and every worktree shares the canonical hooks directory.
 - **WIP branches** (`wip/*`) are automatically exempt — the script detects and skips them
 - **Why a script instead of a git hook?** Beads owns the `.git/hooks/pre-push` hook via bd-shim. Installing a separate pre-push hook would conflict. The script achieves the same goal without hook conflicts
 
