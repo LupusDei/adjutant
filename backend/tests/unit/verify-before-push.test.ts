@@ -76,12 +76,26 @@ describe('verify-before-push.sh', () => {
 
   it('should have numbered step labels for clear failure reporting', () => {
     scriptContent = readFileSync(SCRIPT_PATH, 'utf-8');
-    // The script gained a dedicated Typecheck step (adj-181.3.8), so it is now 4 steps:
-    // Lint, Typecheck, Backend tests, Frontend tests. Labels must stay consistent.
-    expect(scriptContent).toContain('Step 1/4');
-    expect(scriptContent).toContain('Step 2/4');
-    expect(scriptContent).toContain('Step 3/4');
-    expect(scriptContent).toContain('Step 4/4');
+    // Assert the INVARIANT rather than a step count. This test previously hardcoded "Step N/4"
+    // and had to be edited every time a step was added (Typecheck in adj-181.3.8, the repo-hygiene
+    // alarm in adj-mtzot) — a test that must be rewritten to stay green tests the edit, not the
+    // property. What actually matters is that the labels agree: every step reports the same
+    // total, and the numbers run 1..total with no gaps or duplicates, so a stale "Step 3/4" left
+    // behind in a 5-step script fails here instead of confusing whoever is reading a failure.
+    const labels = [...scriptContent.matchAll(/Step (\d+)\/(\d+)/g)].map((m) => ({
+      index: Number(m[1]),
+      total: Number(m[2]),
+    }));
+
+    expect(labels.length).toBeGreaterThan(0);
+    const totals = new Set(labels.map((l) => l.total));
+    expect([...totals]).toHaveLength(1);
+
+    const total = labels[0]!.total;
+    expect(labels).toHaveLength(total);
+    expect(labels.map((l) => l.index).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: total }, (_, i) => i + 1),
+    );
   });
 
   it('should not suppress stderr on any verification command', () => {
