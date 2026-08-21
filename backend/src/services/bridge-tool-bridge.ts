@@ -734,17 +734,33 @@ function runListChannels(deps: BridgeToolDeps, projectId: string | null): Bridge
 /** The Commander's member id in every DM. */
 const OPERATOR_IDENTITY = "user";
 
+/** Upper bound on last-message lookups when several DM threads tie (adj-xbszj). */
+const DM_RANK_MAX = 12;
+
 /**
  * Find the DM conversation between an agent and the Commander (adj-xbszj).
  *
- * The id is looked UP, never computed. `dmConversationId()` is documented as deterministic, but
- * it does not reproduce the ids actually in the database: the live kerrigan<->user thread (404
- * messages) is dm_b969fd57..., while the helper returns dm_4bc608e9... for the same pair, and no
- * sha1/md5/sha256 variant of that pair matches. Trusting the formula would silently scope reads
- * to a conversation that does not exist — an empty thread, which is exactly the reported bug.
+ * The id is looked UP, never computed. `dmConversationId()` is documented as deterministic but
+ * does not reproduce the ids in the database: the live kerrigan<->user thread is dm_b969fd57...,
+ * while the helper returns dm_4bc608e9... for that exact membership, and no sha1/md5/sha256
+ * variant of the pair matches. Trusting the formula scopes every DM read to a conversation that
+ * does not exist.
  *
- * Casing duplicates are real too ({kerrigan,user} AND {Kerrigan,user} both exist), so candidates
- * are matched case-insensitively and the most recently active one wins.
+ * Lookup alone is not enough either. Production has THIRTEEN kind='dm' conversations whose members
+ * are {kerrigan, user}: one real thread plus twelve legacy rows the backfill keyed by thread id
+ * (proposal-reviews, bug-hunt, adj-067, emergency, proposal-<uuid>...), and those legacy rows
+ * contain OTHER agents' messages. So the choice is ranked:
+ *
+ *   1. Prefer the canonical `dm_` prefix — the form getOrCreateDm/dmConversationId produce.
+ *   2. Break remaining ties on the ACTUAL last message, not conversations.updated_at, which the
+ *      backfill stamped identically (2026-05-29 20:36:58) one second NEWER than the real thread —
+ *      sorting by it picks a legacy row every time. That is a shipped-and-observed failure, not a
+ *      hypothetical: the first version of this fix returned March proposal-review chatter from
+ *      valerian and reviewer-1 as "the kerrigan thread".
+ *   3. updated_at only as a final tiebreak.
+ *
+ * Casing duplicates are real too ({kerrigan,user} AND {Kerrigan,user}), so members match
+ * case-insensitively.
  */
 function resolveAgentDmConversation(
   deps: BridgeToolDeps,
@@ -764,8 +780,24 @@ function resolveAgentDmConversation(
     return members.some((m) => m.toLowerCase() === wanted) && members.includes(OPERATOR_IDENTITY);
   });
 
-  candidates.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  return candidates[0];
+  if (candidates.length <= 1) return candidates[0];
+
+  // Canonical DMs win outright over legacy thread-id rows.
+  const canonicalDms = candidates.filter((c) => c.id.startsWith("dm_"));
+  const pool = canonicalDms.length > 0 ? canonicalDms : candidates;
+  if (pool.length === 1) return pool[0];
+
+  // Still tied — ask the store when each thread last saw traffic. Bounded by DM_RANK_MAX so a
+  // voice-path read can never fan out into an unbounded number of queries.
+  const ranked = pool.slice(0, DM_RANK_MAX).map((conv) => {
+    const [newest] = deps.messageStore.getMessages({ conversationId: conv.id, limit: 1 });
+    return { conv, lastAt: newest?.createdAt ?? "" };
+  });
+  ranked.sort(
+    (a, b) =>
+      b.lastAt.localeCompare(a.lastAt) || (b.conv.updatedAt ?? "").localeCompare(a.conv.updatedAt ?? ""),
+  );
+  return ranked[0]?.conv;
 }
 
 /**

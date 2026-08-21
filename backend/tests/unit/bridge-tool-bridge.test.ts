@@ -1505,7 +1505,13 @@ describe("read_messages — an agent's DM thread (adj-xbszj)", () => {
   it("should pick the most recently active thread when a casing duplicate exists", async () => {
     // Live data really has two: members {kerrigan,user} AND members {Kerrigan,user}.
     const stale = { ...DM, id: "dm_stale_casing", updatedAt: "2026-03-01T00:00:00Z" };
-    const getMessages = vi.fn().mockReturnValue([]);
+    // The live thread has content; the casing duplicate is empty. Without this the DM read finds
+    // nothing and correctly falls back to the widening, which is a different code path.
+    const getMessages = vi.fn((o: Record<string, unknown>) =>
+      o["conversationId"] === DM.id
+        ? [{ id: "k", agentId: "kerrigan", recipient: "user", role: "agent", body: "live", conversationId: DM.id, createdAt: "2026-08-21T00:00:00Z" }]
+        : [],
+    );
     const conversationStore = dmStore({
       getConversationsForMember: vi.fn().mockReturnValue([stale, DM]),
       getMembers: vi.fn((id: string) =>
@@ -1527,7 +1533,8 @@ describe("read_messages — an agent's DM thread (adj-xbszj)", () => {
     mockGetAgents.mockResolvedValue({ success: true, data: [{ id: "adjutant/kerrigan", name: "kerrigan" }] });
     await bridge.executeTool({ tool: "read_messages", args: { agentId: "Kerrigan" } });
 
-    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    // Ranking probes each candidate first, so the actual read is the final call.
+    const opts = getMessages.mock.calls.at(-1)![0] as Record<string, unknown>;
     expect(opts["conversationId"]).toBe(DM.id);
   });
 
@@ -1562,5 +1569,94 @@ describe("read_messages — an agent's DM thread (adj-xbszj)", () => {
     const second = getMessages.mock.calls[1]![0] as Record<string, unknown>;
     expect(second["agentId"]).toBe("kerrigan");
     if (res.ok) expect((res.data as { count: number }).count).toBe(1);
+  });
+});
+
+// ============================================================================
+// DM resolution against the REAL production shape (adj-xbszj follow-up).
+//
+// Shipped a fix, watched it live, and it picked the WRONG thread — the "kerrigan thread" came
+// back full of valerian and reviewer-1 messages from March. Cause, straight from the database:
+// kerrigan has THIRTEEN kind='dm' conversations whose members are {kerrigan,user}. Twelve are
+// legacy backfilled rows keyed by thread id (proposal-reviews, bug-hunt, adj-067, emergency,
+// proposal-<uuid>...), and those legacy rows contain OTHER agents' messages. The real thread is
+// dm_b969fd57... with 407 messages, most recent today.
+//
+// conversations.updated_at cannot break the tie: every legacy row is stamped 2026-05-29 20:36:58
+// by the backfill, which is one second NEWER than the real DM's 20:36:57. Sorting by it picks a
+// legacy row every time. Rank by ACTUAL last message instead, and prefer the canonical `dm_`
+// prefix that getOrCreateDm/dmConversationId produce.
+// ============================================================================
+
+describe("read_messages — DM resolution against real production shape (adj-xbszj)", () => {
+  const REAL = { id: "dm_b969fd57b68889cacef67083", kind: "dm", title: null, archived: false, createdAt: "2026-02-24T00:00:00Z", updatedAt: "2026-05-29T20:36:57Z" };
+  const LEGACY = ["proposal-reviews", "bug-hunt", "adj-067", "emergency"].map((id) => ({
+    id, kind: "dm", title: null, archived: false,
+    createdAt: "2026-03-01T00:00:00Z",
+    // One second NEWER than the real thread — the backfill stamp that broke naive sorting.
+    updatedAt: "2026-05-29T20:36:58Z",
+  }));
+
+  it("should pick the canonical dm_ thread over legacy backfilled conversations with a newer updated_at", async () => {
+    // The real thread has 407 messages; the legacy rows are the decoys.
+    const getMessages = vi.fn((o: Record<string, unknown>) =>
+      o["conversationId"] === REAL.id
+        ? [{ id: "r", agentId: "kerrigan", recipient: "user", role: "agent", body: "today", conversationId: REAL.id, createdAt: "2026-08-21T13:12:21Z" }]
+        : [],
+    );
+    const conversationStore = {
+      listChannels: vi.fn().mockReturnValue([]),
+      getConversationsForMember: vi.fn().mockReturnValue([...LEGACY, REAL]),
+      getMembers: vi.fn().mockReturnValue([
+        { memberId: "kerrigan", memberKind: "agent", role: "member" },
+        { memberId: "user", memberKind: "user", role: "member" },
+      ]),
+    } as unknown as BridgeToolDeps["conversationStore"];
+
+    const bridge = createBridgeToolBridge(
+      makeDeps({
+        messageStore: { getMessages, getUnreadCounts: vi.fn().mockReturnValue([]) } as unknown as BridgeToolDeps["messageStore"],
+        conversationStore,
+      }),
+    );
+
+    await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
+
+    const opts = getMessages.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBe(REAL.id);
+  });
+
+  it("should rank by ACTUAL last message when several canonical dm_ threads exist", async () => {
+    const stale = { ...REAL, id: "dm_stale", updatedAt: "2026-09-01T00:00:00Z" };
+    const getMessages = vi.fn((o: Record<string, unknown>) => {
+      if (o["conversationId"] === "dm_stale") {
+        return [{ id: "s", agentId: "kerrigan", recipient: "user", role: "agent", body: "old", conversationId: "dm_stale", createdAt: "2026-03-01T00:00:00Z" }];
+      }
+      if (o["conversationId"] === REAL.id) {
+        return [{ id: "r", agentId: "kerrigan", recipient: "user", role: "agent", body: "new", conversationId: REAL.id, createdAt: "2026-08-21T13:12:21Z" }];
+      }
+      return [];
+    });
+    const conversationStore = {
+      listChannels: vi.fn().mockReturnValue([]),
+      getConversationsForMember: vi.fn().mockReturnValue([stale, REAL]),
+      getMembers: vi.fn().mockReturnValue([
+        { memberId: "kerrigan", memberKind: "agent", role: "member" },
+        { memberId: "user", memberKind: "user", role: "member" },
+      ]),
+    } as unknown as BridgeToolDeps["conversationStore"];
+
+    const bridge = createBridgeToolBridge(
+      makeDeps({
+        messageStore: { getMessages, getUnreadCounts: vi.fn().mockReturnValue([]) } as unknown as BridgeToolDeps["messageStore"],
+        conversationStore,
+      }),
+    );
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
+
+    expect(res.ok).toBe(true);
+    const finalOpts = getMessages.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(finalOpts["conversationId"]).toBe(REAL.id);
   });
 });
