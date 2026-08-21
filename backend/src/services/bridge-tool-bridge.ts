@@ -34,7 +34,7 @@ import { resolveAgentName } from "./bridge-agent-resolver.js";
 import type { EventStore } from "./event-store.js";
 import type { TimelineEvent } from "../types/events.js";
 import type { MessageStore } from "./message-store.js";
-import type { ChannelSummary, ConversationStore } from "./conversation-store.js";
+import type { ChannelSummary, Conversation, ConversationStore } from "./conversation-store.js";
 import type { ProposalStore } from "./proposal-store.js";
 import type { AutoDevelopStore } from "./auto-develop-store.js";
 import type { QuestionService } from "./question-service.js";
@@ -89,7 +89,7 @@ export interface BridgeToolDeps {
   // non-member OBSERVER of most channels (a channel shared by several agents is exactly that
   // case). This mirrors the adj-egziw operator exemption and stays read-only — the WS fan-out
   // gate that keeps non-member AGENTS out of channel traffic (adj-2jy4u) is untouched.
-  conversationStore: Pick<ConversationStore, "listChannels" | "getMembers">;
+  conversationStore: Pick<ConversationStore, "listChannels" | "getMembers" | "getConversationsForMember">;
 }
 
 export interface BridgeToolRequest {
@@ -731,6 +731,57 @@ function runListChannels(deps: BridgeToolDeps, projectId: string | null): Bridge
   return ok(TOOL_LIST_CHANNELS, projectId, { channels: data, count: data.length });
 }
 
+/** The Commander's member id in every DM. */
+const OPERATOR_IDENTITY = "user";
+
+/**
+ * Find the DM conversation between an agent and the Commander (adj-xbszj).
+ *
+ * The id is looked UP, never computed. `dmConversationId()` is documented as deterministic, but
+ * it does not reproduce the ids actually in the database: the live kerrigan<->user thread (404
+ * messages) is dm_b969fd57..., while the helper returns dm_4bc608e9... for the same pair, and no
+ * sha1/md5/sha256 variant of that pair matches. Trusting the formula would silently scope reads
+ * to a conversation that does not exist — an empty thread, which is exactly the reported bug.
+ *
+ * Casing duplicates are real too ({kerrigan,user} AND {Kerrigan,user} both exist), so candidates
+ * are matched case-insensitively and the most recently active one wins.
+ */
+function resolveAgentDmConversation(
+  deps: BridgeToolDeps,
+  canonical: string,
+  spoken: string,
+): Conversation | undefined {
+  const lookups = spoken !== canonical ? [canonical, spoken] : [canonical];
+  const byId = new Map<string, Conversation>();
+  for (const name of lookups) {
+    for (const conv of deps.conversationStore.getConversationsForMember(name)) byId.set(conv.id, conv);
+  }
+
+  const wanted = canonical.toLowerCase();
+  const candidates = [...byId.values()].filter((conv) => {
+    if (conv.kind !== "dm") return false;
+    const members = deps.conversationStore.getMembers(conv.id).map((m) => m.memberId);
+    return members.some((m) => m.toLowerCase() === wanted) && members.includes(OPERATOR_IDENTITY);
+  });
+
+  candidates.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+  return candidates[0];
+}
+
+/**
+ * Resolve a spoken/typed agent name to the canonical id (case/alias/phonetic: "Phoenix" → fenix).
+ *
+ * A non-match is NOT an error: message HISTORY is usually with agents that are no longer running,
+ * so they are absent from getAgents(). Falling back to the name as-is means an unknown name simply
+ * yields an empty result rather than a rejection the avatar has to explain.
+ */
+async function resolveSpokenAgentName(spoken: string): Promise<string> {
+  const agentsResult = await getAgents();
+  const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
+  const resolution = resolveAgentName(spoken, allAgents.map((a) => ({ id: a.id, name: a.name })));
+  return resolution.matched && resolution.canonical ? resolution.canonical : spoken;
+}
+
 /**
  * read_messages — let the avatar recall past agent/user communications so it can give the
  * Commander context on prior discussions (the gap the avatar flagged about itself, adj-202.11).
@@ -752,12 +803,18 @@ async function runReadMessages(
   }
 
   const limit = Math.min(parsed.data.limit ?? READ_MESSAGES_DEFAULT_LIMIT, READ_MESSAGES_MAX_LIMIT);
-  const opts: { limit: number; agentId?: string; conversationId?: string } = { limit };
+  const opts: { limit: number; agentId?: string; senderId?: string; conversationId?: string } = { limit };
   let channel: { id: string; title: string } | undefined;
+  let sender: string | undefined;
+  let agent: string | undefined;
+  /** Set when a DM-scoped read should retry via the legacy widening if it finds nothing. */
+  let legacyWideningFor: string | undefined;
 
-  // Scope precedence: an explicit conversationId (strictest) > a channel NAME > an agent thread.
-  // They are mutually exclusive on purpose — ANDing agentId onto a channel read would narrow the
-  // channel to a single sender and quietly hide the rest of the room from the avatar.
+  // Scope: conversationId (strictest) > a channel NAME > an agent's DM thread > fleet-wide.
+  // A channel and an agent COMBINE rather than compete (adj-xbszj): naming both reads that
+  // agent's messages inside that channel. They used to be mutually exclusive with the channel
+  // winning silently, so the avatar could ask a narrower question, receive the whole room with
+  // no error, and conclude its own reach was smaller than it is.
   if (parsed.data.conversationId !== undefined) {
     opts.conversationId = parsed.data.conversationId;
   } else if (parsed.data.channel !== undefined) {
@@ -784,18 +841,37 @@ async function runReadMessages(
     }
     channel = { id: match.id, title: match.title };
     opts.conversationId = match.id;
+
+    // Optional narrowing: one speaker inside that room. A strict sender filter, because the
+    // DM-shaped agentId widening is ignored once a conversationId is set.
+    if (parsed.data.agentId !== undefined) {
+      sender = await resolveSpokenAgentName(parsed.data.agentId);
+      opts.senderId = sender;
+    }
   } else if (parsed.data.agentId !== undefined) {
-    // Resolve to a canonical LIVE-agent name when possible (Phoenix→fenix). But message HISTORY
-    // is usually with agents that are NOT currently running (so not in getAgents()), so a
-    // non-match is NOT an error — fall back to filtering by the provided name as-is (the store
-    // matches messages from/to that name; an unknown name simply yields an empty result).
-    const agentsResult = await getAgents();
-    const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
-    const resolution = resolveAgentName(parsed.data.agentId, allAgents.map((a) => ({ id: a.id, name: a.name })));
-    opts.agentId = resolution.matched && resolution.canonical ? resolution.canonical : parsed.data.agentId;
+    // No channel named — read that agent's DM THREAD with the Commander, scoped to the actual
+    // conversation. The old widening `(agent_id = ? OR (role='user' AND recipient = ?))` is not
+    // conversation-scoped: it swept the agent's CHANNEL posts into the thread and the size budget
+    // then truncated the batch, so "my thread with kerrigan" came back as a smear across scopes.
+    const canonical = await resolveSpokenAgentName(parsed.data.agentId);
+    const dm = resolveAgentDmConversation(deps, canonical, parsed.data.agentId);
+    if (dm !== undefined) {
+      opts.conversationId = dm.id;
+      agent = canonical;
+      // ~5% of recipient-bearing rows predate conversation_id, so keep a way back.
+      legacyWideningFor = canonical;
+    } else {
+      opts.agentId = canonical;
+      agent = canonical;
+    }
   }
 
-  const newestFirst = deps.messageStore.getMessages(opts);
+  let newestFirst = deps.messageStore.getMessages(opts);
+  // A DM conversation that exists but holds nothing usually means pre-conversation_id history.
+  // Returning "no messages" there would be a worse answer than the smear this replaced.
+  if (newestFirst.length === 0 && legacyWideningFor !== undefined) {
+    newestFirst = deps.messageStore.getMessages({ limit, agentId: legacyWideningFor });
+  }
   // Collapse control chars + whitespace and cap each body at READ_MESSAGES_BODY_MAX so a single
   // message comes through in FULL (not a 300-char preview). Keep unicode — the avatar needs the
   // real words to summarize what an agent said.
@@ -823,8 +899,12 @@ async function runReadMessages(
   const messages = keptNewestFirst.reverse();
 
   return ok(TOOL_READ_MESSAGES, projectId, {
-    // Which room this came from, when the read was scoped to a channel (adj-6fg1g).
+    // Which room this came from, when the read was scoped to a channel (adj-6fg1g), and which
+    // speaker it was narrowed to, so the avatar can say "kerrigan, in fleet-ops" (adj-xbszj).
     ...(channel !== undefined ? { channel } : {}),
+    ...(sender !== undefined ? { sender } : {}),
+    // Whose thread this is, so the avatar can say "your thread with kerrigan" (adj-xbszj).
+    ...(agent !== undefined ? { agent } : {}),
     messages,
     count: messages.length,
     // So the avatar can say "showing the N most recent" when older ones were dropped for size.

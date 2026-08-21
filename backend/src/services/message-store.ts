@@ -69,6 +69,13 @@ interface InsertMessageInput {
 
 interface GetMessagesOptions {
   agentId?: string;
+  /**
+   * Strict SENDER filter (`agent_id = ?`), unlike `agentId` which widens to the DM-shaped
+   * `(agent_id = ? OR (role='user' AND recipient = ?))`. This one COMPOSES with conversationId,
+   * so "what did kerrigan say in this channel" is expressible (adj-xbszj). `agentId` cannot do
+   * that: it is skipped entirely once a conversationId is present.
+   */
+  senderId?: string;
   recipient?: string;
   threadId?: string;
   conversationId?: string;
@@ -285,6 +292,13 @@ export function createMessageStore(
       } else if (opts.agentId !== undefined) {
         conditions.push("(agent_id = ? OR (role = 'user' AND recipient = ?))");
         params.push(opts.agentId, opts.agentId);
+      }
+
+      // Composes with ANY scope above — a channel read narrowed to one speaker, or a strict
+      // sender filter on its own.
+      if (opts.senderId !== undefined) {
+        conditions.push("agent_id = ?");
+        params.push(opts.senderId);
       }
 
       if (opts.recipient !== undefined) {

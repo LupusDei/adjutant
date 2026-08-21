@@ -169,3 +169,56 @@ describe("MessageStore sibling read paths — same-second determinism (adj-cax0y
     expect(thread!.latestBody).toBe("actual latest");
   });
 });
+
+// ============================================================================
+// senderId — a strict sender filter that COMPOSES with conversationId (adj-xbszj).
+//
+// The existing `agentId` option is DM-shaped: it widens to
+// `(agent_id = ? OR (role='user' AND recipient = ?))` and is skipped entirely when a
+// conversationId is present. So there was no way to ask "what did kerrigan say in THIS channel" —
+// the Bridge passed both and silently got the whole room back, which is how it ended up describing
+// its own capabilities wrongly to the Commander.
+// ============================================================================
+
+describe("MessageStore senderId filter (adj-xbszj)", () => {
+  beforeEach(() => {
+    for (const [agent, body] of [
+      ["kerrigan", "kerrigan in room"],
+      ["raynor", "raynor in room"],
+      ["kerrigan", "kerrigan again"],
+    ] as const) {
+      store.insertMessage({ agentId: agent, role: "agent", body, conversationId: "conv_room" });
+    }
+    // Same sender, DIFFERENT conversation — must never leak into a scoped read.
+    store.insertMessage({
+      agentId: "kerrigan",
+      role: "agent",
+      body: "kerrigan elsewhere",
+      conversationId: "conv_other",
+    });
+  });
+
+  it("should return only that sender's messages within the given conversation", () => {
+    const got = store.getMessages({ conversationId: "conv_room", senderId: "kerrigan", limit: 20 });
+
+    expect(got.map((m) => m.body)).toEqual(["kerrigan again", "kerrigan in room"]);
+  });
+
+  it("should not leak the same sender's messages from another conversation", () => {
+    const got = store.getMessages({ conversationId: "conv_room", senderId: "kerrigan", limit: 20 });
+
+    expect(got.some((m) => m.body === "kerrigan elsewhere")).toBe(false);
+  });
+
+  it("should return the whole room when senderId is omitted", () => {
+    const got = store.getMessages({ conversationId: "conv_room", limit: 20 });
+
+    expect(got).toHaveLength(3);
+  });
+
+  it("should return an empty result for a sender who never posted in that conversation", () => {
+    const got = store.getMessages({ conversationId: "conv_room", senderId: "artanis", limit: 20 });
+
+    expect(got).toEqual([]);
+  });
+});

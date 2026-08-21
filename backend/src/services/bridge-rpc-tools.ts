@@ -150,11 +150,11 @@ export const BRIDGE_RPC_TOOLS: RunwayRpcToolDef[] = [
     type: "backend_rpc",
     name: "read_messages",
     description:
-      "Read recent agent/user messages to RECALL what was said earlier. You NEVER need a conversation id or any other id — pass an agent's NAME in agentId (e.g. \"fenix\") for that agent's thread, or a channel's NAME in channel (e.g. \"fleet-ops\") to read a shared multi-agent channel; omit everything for fleet-wide recent traffic. Use list_channels first if you don't know the channel name. The lookup resolves the conversation for you. The structured result is the source of truth.",
+      "Read message history. EVERY argument is optional and they COMBINE — this tool is never blocked on missing information, so attempt the read before saying you cannot. Omit everything to read the Commander's own recent traffic across the fleet (use this for \"what did I miss\", \"summarize my last messages\", \"catch me up\"). Pass an agent's NAME in agentId (e.g. \"fenix\") to read YOUR 1:1 thread with that agent — the private back-and-forth between the Commander and them. Pass a channel's NAME in channel (e.g. \"fleet-ops\") to read a shared multi-agent room. Pass BOTH to narrow a channel to one speaker (\"what did kerrigan say in fleet-ops\"). You NEVER need a conversation id or any other id; names are enough and the lookup resolves them for you. The structured result is the source of truth.",
     parameters: [
-      { name: "agentId", type: "string", description: "Optional agent NAME (e.g. \"fenix\"). This is all you need to read one agent's thread — no id required." },
-      { name: "channel", type: "string", description: "Optional channel NAME (e.g. \"fleet-ops\") to read a shared multi-agent channel — no id required. Use list_channels to discover names." },
-      { name: "limit", type: "number", description: "Optional max messages to return (default 10, capped at 15)." },
+      { name: "agentId", type: "string", description: "Optional agent NAME (e.g. \"fenix\"). Alone: the Commander's 1:1 DM thread with that agent. With `channel`: only what that agent said in that channel." },
+      { name: "channel", type: "string", description: "Optional channel NAME (e.g. \"fleet-ops\") — a shared multi-agent room. Use list_channels to discover names. Omit it to read a DM thread or fleet-wide." },
+      { name: "limit", type: "number", description: "Optional max messages to return (default 10)." },
     ],
     timeoutSeconds: 8,
   },
@@ -306,7 +306,7 @@ You can query live fleet state using these read-only tools. CALL the matching to
 - get_project_state — a snapshot of a project. Pass a project NAME in the project argument to target one; omit for the default.
 - get_auto_develop_status — the auto-develop loop status for a project. Pass a project NAME in the project argument; omit for the default.
 CROSS-PROJECT RULE: you coordinate the WHOLE fleet. When the Commander names a project, look it up by NAME — never say you can only see one project, and never ask for a project id.
-- read_messages — recall what was said EARLIER between agents/the Commander; use it to give context on prior/past discussions. Pass an agent NAME to focus on their thread, or a channel NAME to read a shared multi-agent channel; otherwise it reads recent fleet-wide. The structured result is the source of truth.
+- read_messages — recall what was said EARLIER. Every argument is optional and they combine, so you are NEVER unable to read: omit everything for the Commander's own recent traffic (the right call for "what did I miss" / "summarize my last messages"), pass an agent NAME for your 1:1 thread with that agent, pass a channel NAME for a shared room, or pass both to hear one speaker inside one room. Never tell the Commander you can only read a channel or only read one agent — you can read all of these. If a read comes back thin, say what you found and try a wider one rather than declaring a limit.
 - list_channels — the shared rooms where several agents talk to each other. Use it when the Commander asks about a channel or about cross-agent discussion, then read that channel by NAME with read_messages({ channel }). You are NOT a member of most channels — you observe them, so read freely.
 - query_memories — RECALL what you've LEARNED across sessions: the Commander's stated preferences, past decisions, recorded corrections, and fleet patterns. The structured result is the source of truth.
 - list_timeline — the fleet's RECENT ACTIVITY feed (the last ~50 events across all projects: status changes, progress, announcements, beads updated/closed, coordinator actions, proposals completed, deploys). This is your best source for "what's been happening lately." The structured result is the source of truth.

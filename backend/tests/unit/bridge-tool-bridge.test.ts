@@ -146,6 +146,7 @@ function makeDeps(overrides: Partial<BridgeToolDeps> = {}): BridgeToolDeps {
     conversationStore: {
       listChannels: vi.fn().mockReturnValue([]),
       getMembers: vi.fn().mockReturnValue([]),
+      getConversationsForMember: vi.fn().mockReturnValue([]),
     } as unknown as BridgeToolDeps["conversationStore"],
     ...overrides,
   };
@@ -1110,6 +1111,7 @@ const CHANNELS = [
 function makeConversationStore(overrides: Record<string, unknown> = {}) {
   return {
     listChannels: vi.fn().mockReturnValue(CHANNELS),
+    getConversationsForMember: vi.fn().mockReturnValue([]),
     getMembers: vi.fn().mockReturnValue([
       { conversationId: "conv_ops", memberId: "fenix", memberKind: "agent", role: "member" },
       { conversationId: "conv_ops", memberId: "kerrigan", memberKind: "agent", role: "member" },
@@ -1335,5 +1337,230 @@ describe("read_messages — channel scoping (adj-6fg1g)", () => {
     await bridge.executeTool({ tool: "read_messages", args: { channel: "fleet-ops", limit: 500 } });
 
     expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ limit: 30 }));
+  });
+});
+
+// ============================================================================
+// read_messages — every scope must be reachable, and combining them must MEAN
+// something rather than be silently dropped (adj-xbszj).
+//
+// The regression this pins: adj-6fg1g made channel and agentId mutually exclusive with channel
+// winning, so the avatar could ask "what did kerrigan say in Saim city", get the entire room
+// back with no error, and conclude its own capabilities were narrower than they are. It then
+// told the Commander it could "only read messages from a specific channel or from a specific
+// agent" — while the no-argument and DM modes worked the whole time.
+// ============================================================================
+
+describe("read_messages — scope matrix (adj-xbszj)", () => {
+  function storeWith(getMessages: ReturnType<typeof vi.fn>) {
+    return {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+  }
+
+  it("should filter a channel read to one sender when BOTH channel and agentId are given", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore: makeConversationStore() }),
+    );
+
+    const res = await bridge.executeTool({
+      tool: "read_messages",
+      args: { channel: "fleet-ops", agentId: "kerrigan" },
+    });
+
+    expect(res.ok).toBe(true);
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBe("conv_ops");
+    // Strict sender filter — NOT the DM-shaped agentId widening, which the store ignores
+    // entirely once a conversationId is present (that is what made this silently wrong).
+    expect(opts["senderId"]).toBe("kerrigan");
+    expect(opts["agentId"]).toBeUndefined();
+  });
+
+  it("should report which sender a channel read was narrowed to, so the avatar can say so", async () => {
+    mockGetAgents.mockResolvedValue({ success: true, data: [{ id: "adjutant/kerrigan", name: "kerrigan" }] });
+    const getMessages = vi.fn().mockReturnValue([
+      { id: "k1", agentId: "kerrigan", recipient: null, role: "agent", body: "status green", conversationId: "conv_ops" },
+    ]);
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore: makeConversationStore() }),
+    );
+
+    const res = await bridge.executeTool({
+      tool: "read_messages",
+      args: { channel: "fleet-ops", agentId: "Kerrigan" },
+    });
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const data = res.data as { channel: { title: string }; sender?: string; count: number };
+      expect(data.channel.title).toBe("fleet-ops");
+      expect(data.sender).toBe("kerrigan");
+    }
+  });
+
+  it("should still read a whole channel when agentId is omitted", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore: makeConversationStore() }),
+    );
+
+    await bridge.executeTool({ tool: "read_messages", args: { channel: "fleet-ops" } });
+
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBe("conv_ops");
+    expect(opts["senderId"]).toBeUndefined();
+  });
+
+  it("should still read an agent's DM thread when no channel is named", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore: storeWith(getMessages) }));
+
+    await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
+
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    // DM widening, NOT a sender filter — a DM thread includes the Commander's side of it.
+    expect(opts["agentId"]).toBe("kerrigan");
+    expect(opts["senderId"]).toBeUndefined();
+    expect(opts["conversationId"]).toBeUndefined();
+  });
+
+  it("should still read fleet-wide when nothing at all is passed", async () => {
+    const getMessages = vi.fn().mockReturnValue([]);
+    const bridge = createBridgeToolBridge(makeDeps({ messageStore: storeWith(getMessages) }));
+
+    await bridge.executeTool({ tool: "read_messages", args: {} });
+
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBeUndefined();
+    expect(opts["agentId"]).toBeUndefined();
+    expect(opts["senderId"]).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// read_messages({agentId}) must read the DM THREAD, not a smear across scopes (adj-xbszj).
+//
+// The General reported the Bridge could never read the thread between the Commander and a
+// specific agent. Measured on live data, the cause: `agentId` widens to
+// `(agent_id = ? OR (role='user' AND recipient = ?))`, which is NOT conversation-scoped — it
+// sweeps in that agent's CHANNEL posts alongside the DMs, and the RPC size budget then truncates
+// the batch. Asking for "my thread with kerrigan" returned a mixture, with channel posts carrying
+// an empty `to`.
+//
+// The DM id cannot be computed. dmConversationId("kerrigan","user") yields
+// dm_4bc608e9..., while the live conversation holding 404 kerrigan<->user messages is
+// dm_b969fd57... whose members are exactly {kerrigan, user}. No sha1/md5/sha256 variant of that
+// pair reproduces the stored id, so the DM must be resolved by MEMBERSHIP LOOKUP.
+// ============================================================================
+
+describe("read_messages — an agent's DM thread (adj-xbszj)", () => {
+  const DM = {
+    id: "dm_live_thread",
+    kind: "dm",
+    title: null,
+    archived: false,
+    createdAt: "2026-02-24T00:00:00Z",
+    updatedAt: "2026-08-21T00:00:00Z",
+  };
+
+  function dmStore(overrides: Record<string, unknown> = {}) {
+    return {
+      listChannels: vi.fn().mockReturnValue(CHANNELS),
+      getConversationsForMember: vi.fn().mockReturnValue([DM]),
+      getMembers: vi.fn().mockReturnValue([
+        { conversationId: DM.id, memberId: "kerrigan", memberKind: "agent", role: "member" },
+        { conversationId: DM.id, memberId: "user", memberKind: "user", role: "member" },
+      ]),
+      ...overrides,
+    } as unknown as BridgeToolDeps["conversationStore"];
+  }
+
+  function storeWith(getMessages: ReturnType<typeof vi.fn>) {
+    return {
+      getMessages,
+      getUnreadCounts: vi.fn().mockReturnValue([]),
+    } as unknown as BridgeToolDeps["messageStore"];
+  }
+
+  it("should scope to the agent's DM CONVERSATION, not the agent-name widening", async () => {
+    const getMessages = vi.fn().mockReturnValue([
+      { id: "d1", agentId: "kerrigan", recipient: "user", role: "agent", body: "status", conversationId: DM.id },
+    ]);
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore: dmStore() }),
+    );
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
+
+    expect(res.ok).toBe(true);
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBe(DM.id);
+    // The widening is what pulled channel posts into the thread — it must not be used here.
+    expect(opts["agentId"]).toBeUndefined();
+  });
+
+  it("should pick the most recently active thread when a casing duplicate exists", async () => {
+    // Live data really has two: members {kerrigan,user} AND members {Kerrigan,user}.
+    const stale = { ...DM, id: "dm_stale_casing", updatedAt: "2026-03-01T00:00:00Z" };
+    const getMessages = vi.fn().mockReturnValue([]);
+    const conversationStore = dmStore({
+      getConversationsForMember: vi.fn().mockReturnValue([stale, DM]),
+      getMembers: vi.fn((id: string) =>
+        id === "dm_stale_casing"
+          ? [
+              { conversationId: id, memberId: "Kerrigan", memberKind: "agent", role: "member" },
+              { conversationId: id, memberId: "user", memberKind: "user", role: "member" },
+            ]
+          : [
+              { conversationId: id, memberId: "kerrigan", memberKind: "agent", role: "member" },
+              { conversationId: id, memberId: "user", memberKind: "user", role: "member" },
+            ],
+      ),
+    });
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore }),
+    );
+
+    mockGetAgents.mockResolvedValue({ success: true, data: [{ id: "adjutant/kerrigan", name: "kerrigan" }] });
+    await bridge.executeTool({ tool: "read_messages", args: { agentId: "Kerrigan" } });
+
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["conversationId"]).toBe(DM.id);
+  });
+
+  it("should fall back to the legacy widening when the agent has no DM conversation", async () => {
+    // ~5% of recipient-bearing rows predate conversation_id. Returning nothing for those would be
+    // a worse failure than the smear this replaces.
+    const getMessages = vi.fn().mockReturnValue([]);
+    const conversationStore = dmStore({ getConversationsForMember: vi.fn().mockReturnValue([]) });
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore }),
+    );
+
+    await bridge.executeTool({ tool: "read_messages", args: { agentId: "ghost-agent" } });
+
+    const opts = getMessages.mock.calls[0]![0] as Record<string, unknown>;
+    expect(opts["agentId"]).toBe("ghost-agent");
+    expect(opts["conversationId"]).toBeUndefined();
+  });
+
+  it("should fall back to the widening when the DM conversation exists but is empty", async () => {
+    const getMessages = vi.fn().mockReturnValueOnce([]).mockReturnValueOnce([
+      { id: "old", agentId: "kerrigan", recipient: "user", role: "agent", body: "legacy", conversationId: null },
+    ]);
+    const bridge = createBridgeToolBridge(
+      makeDeps({ messageStore: storeWith(getMessages), conversationStore: dmStore() }),
+    );
+
+    const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
+
+    expect(res.ok).toBe(true);
+    expect(getMessages).toHaveBeenCalledTimes(2);
+    const second = getMessages.mock.calls[1]![0] as Record<string, unknown>;
+    expect(second["agentId"]).toBe("kerrigan");
+    if (res.ok) expect((res.data as { count: number }).count).toBe(1);
   });
 });
