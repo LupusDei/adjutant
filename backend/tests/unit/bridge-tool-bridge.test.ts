@@ -1534,7 +1534,7 @@ describe("read_messages — an agent's DM thread (adj-xbszj)", () => {
     await bridge.executeTool({ tool: "read_messages", args: { agentId: "Kerrigan" } });
 
     // Ranking probes each candidate first, so the actual read is the final call.
-    const opts = getMessages.mock.calls.at(-1)![0] as Record<string, unknown>;
+    const opts = getMessages.mock.calls.at(-1)![0];
     expect(opts["conversationId"]).toBe(DM.id);
   });
 
@@ -1622,7 +1622,7 @@ describe("read_messages — DM resolution against real production shape (adj-xbs
 
     await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
 
-    const opts = getMessages.mock.calls.at(-1)![0] as Record<string, unknown>;
+    const opts = getMessages.mock.calls.at(-1)![0];
     expect(opts["conversationId"]).toBe(REAL.id);
   });
 
@@ -1656,7 +1656,7 @@ describe("read_messages — DM resolution against real production shape (adj-xbs
     const res = await bridge.executeTool({ tool: "read_messages", args: { agentId: "kerrigan" } });
 
     expect(res.ok).toBe(true);
-    const finalOpts = getMessages.mock.calls.at(-1)![0] as Record<string, unknown>;
+    const finalOpts = getMessages.mock.calls.at(-1)![0];
     expect(finalOpts["conversationId"]).toBe(REAL.id);
   });
 });

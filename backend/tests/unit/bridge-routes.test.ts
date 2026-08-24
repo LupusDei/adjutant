@@ -23,6 +23,17 @@ import type { BridgeSessionCreds } from "../../src/services/bridge-session-broke
 import type { BridgeToolResult } from "../../src/services/bridge-tool-bridge.js";
 import { BRIDGE_RPC_TOOLS, BRIDGE_RPC_PERSONALITY } from "../../src/services/bridge-rpc-tools.js";
 
+/**
+ * adj-4lp30: mirror the PRODUCTION auth state — a key store with ZERO keys, which puts
+ * apiKeyAuth in "open mode" where it allows everything. The /tool gate must reject regardless.
+ * (The literal is inlined in the factory because vi.mock is hoisted above const declarations.)
+ */
+const VALID_TEST_KEY = "test-key-abc123";
+vi.mock("../../src/services/api-key-service.js", () => ({
+  hasApiKeys: () => false,
+  validateApiKey: (key: string) => key === "test-key-abc123",
+}));
+
 const CREDS: BridgeSessionCreds = {
   sessionId: "sess-1",
   sessionKey: "stk_abc",
@@ -210,7 +221,8 @@ describe("bridge-routes: POST /api/bridge/tool", () => {
     const executeTool = vi.fn().mockResolvedValue(result);
     const { app } = makeApp({ executeTool });
 
-    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_agents" });
+    const res = await request(app).post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${VALID_TEST_KEY}`).send({ tool: "list_agents" });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -228,7 +240,8 @@ describe("bridge-routes: POST /api/bridge/tool", () => {
     const executeTool = vi.fn().mockResolvedValue(result);
     const { app } = makeApp({ executeTool });
 
-    const res = await request(app).post("/api/bridge/tool").send({ tool: "create_bead" });
+    const res = await request(app).post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${VALID_TEST_KEY}`).send({ tool: "create_bead" });
 
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
@@ -239,7 +252,8 @@ describe("bridge-routes: POST /api/bridge/tool", () => {
     const executeTool = vi.fn();
     const { app } = makeApp({ executeTool });
 
-    const res = await request(app).post("/api/bridge/tool").send({ projectId: "p1" });
+    const res = await request(app).post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${VALID_TEST_KEY}`).send({ projectId: "p1" });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
@@ -256,7 +270,8 @@ describe("bridge-routes: POST /api/bridge/tool", () => {
     const executeTool = vi.fn().mockResolvedValue(result);
     const { app } = makeApp({ executeTool });
 
-    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_beads", projectId: "missing" });
+    const res = await request(app).post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${VALID_TEST_KEY}`).send({ tool: "list_beads", projectId: "missing" });
 
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("PROJECT_NOT_FOUND");
@@ -272,9 +287,95 @@ describe("bridge-routes: POST /api/bridge/tool", () => {
     const executeTool = vi.fn().mockResolvedValue(result);
     const { app } = makeApp({ executeTool });
 
-    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_beads", projectId: "p1" });
+    const res = await request(app).post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${VALID_TEST_KEY}`).send({ tool: "list_beads", projectId: "p1" });
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe("TOOL_FAILED");
+  });
+});
+
+// ============================================================================
+// POST /api/bridge/tool must FAIL CLOSED (adj-4lp30).
+//
+// The endpoint is a read surface over the entire fleet — it returns channel titles, member
+// lists, and message bodies. It was reachable with no credentials at all from the public
+// internet (ngrok -> :4200 -> :4201), answering a keyless POST with 400 (Zod) or 200 (data)
+// rather than 401.
+//
+// Mounting it "behind apiKeyAuth" does NOT fix that. apiKeyAuth is documented open mode: "If no
+// API keys are configured, all requests are allowed." This deployment has ~/.adjutant/api-keys.json
+// with ZERO keys, so the middleware waves everything through. The route must therefore require a
+// key on its own terms, independent of whether the server has any configured.
+//
+// Scoped to /tool ONLY, deliberately. POST /api/bridge/session lives on the same router and is
+// how the WEB voice path starts a Bridge session (frontend api.ts -> '/bridge/session'), so
+// fail-closing the whole router would take out the General's voice access. iOS starts voice via
+// /avatar/native-session, which is an intentional public bypass, and the avatar's own tool calls
+// travel in-process over LiveKit RPC and never touch HTTP.
+// ============================================================================
+
+describe("POST /api/bridge/tool — fail-closed auth (adj-4lp30)", () => {
+  it("should reject a keyless request with 401 even when the server has NO keys configured", async () => {
+    const executeTool = vi.fn();
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app).post("/api/bridge/tool").send({ tool: "list_agents", args: {} });
+
+    expect(res.status).toBe(401);
+    // Fail closed means the tool never runs — not that it runs and we hide the output.
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("should reject an invalid key with 401", async () => {
+    const executeTool = vi.fn();
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app)
+      .post("/api/bridge/tool")
+      .set("Authorization", "Bearer not-a-real-key")
+      .send({ tool: "list_agents", args: {} });
+
+    expect(res.status).toBe(401);
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("should reject BEFORE body validation, so an attacker cannot probe the schema", async () => {
+    const { app } = makeApp({});
+
+    // A malformed body previously produced 400 — which confirmed the endpoint existed and was
+    // reachable. Auth must run first so every unauthenticated probe looks identical.
+    const res = await request(app).post("/api/bridge/tool").send({ nonsense: true });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("should allow a request bearing a valid key", async () => {
+    const executeTool = vi.fn().mockResolvedValue({
+      ok: true,
+      tool: "list_agents",
+      projectId: null,
+      data: { agents: [] },
+    } as BridgeToolResult);
+    const { app } = makeApp({ executeTool });
+
+    const res = await request(app)
+      .post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${VALID_TEST_KEY}`)
+      .send({ tool: "list_agents", args: {} });
+
+    expect(res.status).toBe(200);
+    expect(executeTool).toHaveBeenCalled();
+  });
+
+  it("should leave POST /api/bridge/session reachable — it is the web voice path", async () => {
+    const startSession = vi.fn().mockResolvedValue(CREDS);
+    const { app } = makeApp({ startSession });
+
+    const res = await request(app).post("/api/bridge/session").send({});
+
+    // Whatever this returns, it must NOT be 401: gating /tool must not cost the General voice.
+    expect(res.status).not.toBe(401);
+    expect(startSession).toHaveBeenCalled();
   });
 });
