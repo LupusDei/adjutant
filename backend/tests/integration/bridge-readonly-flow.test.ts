@@ -29,6 +29,17 @@ vi.mock("../../src/utils/index.js", () => ({
   logDebug: vi.fn(),
 }));
 
+/**
+ * adj-4lp30: POST /api/bridge/tool is now FAIL-CLOSED — it requires a valid API key even when
+ * the server has none configured (the production state). This flow test drives the real route,
+ * so it authenticates like any legitimate caller. The literal is inlined because vi.mock hoists.
+ */
+const FLOW_TEST_KEY = "flow-test-key";
+vi.mock("../../src/services/api-key-service.js", () => ({
+  hasApiKeys: () => false,
+  validateApiKey: (key: string) => key === "flow-test-key",
+}));
+
 const mockGetConnectedAgents = vi.fn();
 vi.mock("../../src/services/mcp-server.js", () => ({
   getConnectedAgents: (...args: unknown[]) => mockGetConnectedAgents(...args),
@@ -197,6 +208,7 @@ describe("Bridge read-only flow (integration, in-process)", () => {
     // 2. Ask for the fleet/project state — the authoritative result the voice narrates.
     const toolRes = await request(app)
       .post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${FLOW_TEST_KEY}`)
       .send({ tool: "get_project_state", projectId: PROJECT_ID });
 
     expect(toolRes.status).toBe(200);
@@ -225,7 +237,10 @@ describe("Bridge read-only flow (integration, in-process)", () => {
     });
     const app = mountApp(broker);
 
-    const res = await request(app).post("/api/bridge/tool").send({ tool: "create_bead", projectId: PROJECT_ID });
+    const res = await request(app)
+      .post("/api/bridge/tool")
+      .set("Authorization", `Bearer ${FLOW_TEST_KEY}`)
+      .send({ tool: "create_bead", projectId: PROJECT_ID });
 
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);

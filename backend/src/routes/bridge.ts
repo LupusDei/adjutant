@@ -25,6 +25,7 @@ import { BridgeCostCeilingError } from "../services/bridge-session-broker.js";
 import type { BridgeToolBridge } from "../services/bridge-tool-bridge.js";
 import type { BridgeRpcManager } from "../services/bridge-rpc-handler.js";
 import { BRIDGE_RPC_TOOLS, composeBridgePersonality } from "../services/bridge-rpc-tools.js";
+import { requireApiKey } from "../middleware/index.js";
 import { appendMemorySeed } from "../services/bridge-memory-seed.js";
 import { success, error, validationError, ErrorCode } from "../utils/responses.js";
 import { logError } from "../utils/logger.js";
@@ -135,8 +136,16 @@ export function createBridgeRouter(deps: BridgeRouterDeps): Router {
 
   // -------------------------------------------------------------------------
   // POST /api/bridge/tool — execute one read-only, whitelisted fleet tool.
+  //
+  // requireApiKey (adj-4lp30) is FAIL-CLOSED, unlike the apiKeyAuth this router already sits
+  // behind: that one allows everything when no keys are configured, and this deployment has none,
+  // so the endpoint was answering anonymous callers over a public tunnel. Read-only does not mean
+  // harmless — it returns channel titles, member lists and message bodies.
+  //
+  // Scoped to this route on purpose. POST /api/bridge/session below is how the WEB voice path
+  // starts a Bridge session, so gating the whole router would cost the Commander voice access.
   // -------------------------------------------------------------------------
-  router.post("/tool", async (req, res) => {
+  router.post("/tool", requireApiKey, async (req, res) => {
     const parsed = ToolBodySchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       return res.status(400).json(validationError("Invalid tool request", parsed.error.message));

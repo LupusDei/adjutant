@@ -69,6 +69,13 @@ interface InsertMessageInput {
 
 interface GetMessagesOptions {
   agentId?: string;
+  /**
+   * Strict SENDER filter (`agent_id = ?`), unlike `agentId` which widens to the DM-shaped
+   * `(agent_id = ? OR (role='user' AND recipient = ?))`. This one COMPOSES with conversationId,
+   * so "what did kerrigan say in this channel" is expressible (adj-xbszj). `agentId` cannot do
+   * that: it is skipped entirely once a conversationId is present.
+   */
+  senderId?: string;
   recipient?: string;
   threadId?: string;
   conversationId?: string;
@@ -194,16 +201,26 @@ export function createMessageStore(
   `);
 
   const getByIdStmt = db.prepare("SELECT * FROM messages WHERE id = ?");
+  const getRowidStmt = db.prepare("SELECT rowid AS rowid FROM messages WHERE id = ?");
+
+  /**
+   * The monotonic insertion key for a message id, or undefined when the id is unknown.
+   * Used only to anchor cursor pagination to the same key the ORDER BY sorts on.
+   */
+  function rowidOf(messageId: string): number | undefined {
+    const row = getRowidStmt.get(messageId) as { rowid: number } | undefined;
+    return row?.rowid;
+  }
 
   const pendingForRecipientStmt = db.prepare(`
     SELECT * FROM messages WHERE recipient = ? AND delivery_status = 'pending'
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, rowid ASC
   `);
 
   const pendingForRecipientSinceStmt = db.prepare(`
     SELECT * FROM messages WHERE recipient = ? AND delivery_status = 'pending'
     AND created_at >= ?
-    ORDER BY created_at ASC
+    ORDER BY created_at ASC, rowid ASC
   `);
 
   const markDeliveredStmt = db.prepare(`
@@ -277,6 +294,13 @@ export function createMessageStore(
         params.push(opts.agentId, opts.agentId);
       }
 
+      // Composes with ANY scope above — a channel read narrowed to one speaker, or a strict
+      // sender filter on its own.
+      if (opts.senderId !== undefined) {
+        conditions.push("agent_id = ?");
+        params.push(opts.senderId);
+      }
+
       if (opts.recipient !== undefined) {
         conditions.push("recipient = ?");
         params.push(opts.recipient);
@@ -298,12 +322,14 @@ export function createMessageStore(
         if (ref) opts.before = ref.created_at;
       }
 
-      // Composite cursor pagination: (created_at, id) to handle same-second ties
+      // Composite cursor pagination: (created_at, rowid) — the SAME key pair the ORDER BY uses,
+      // so a page boundary can never straddle a same-second tie (adj-cax0y). rowid is resolved
+      // from the caller's message id; it is an internal ordering key and never leaves the store.
       if (opts.before !== undefined) {
-        const beforeId = opts.beforeId;
-        if (beforeId !== undefined) {
-          conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
-          params.push(opts.before, opts.before, beforeId);
+        const beforeRowid = opts.beforeId !== undefined ? rowidOf(opts.beforeId) : undefined;
+        if (beforeRowid !== undefined) {
+          conditions.push("(created_at < ? OR (created_at = ? AND rowid < ?))");
+          params.push(opts.before, opts.before, beforeRowid);
         } else {
           conditions.push("created_at < ?");
           params.push(opts.before);
@@ -311,10 +337,10 @@ export function createMessageStore(
       }
 
       if (opts.after !== undefined) {
-        const afterId = opts.afterId;
-        if (afterId !== undefined) {
-          conditions.push("(created_at > ? OR (created_at = ? AND id > ?))");
-          params.push(opts.after, opts.after, afterId);
+        const afterRowid = opts.afterId !== undefined ? rowidOf(opts.afterId) : undefined;
+        if (afterRowid !== undefined) {
+          conditions.push("(created_at > ? OR (created_at = ? AND rowid > ?))");
+          params.push(opts.after, opts.after, afterRowid);
         } else {
           conditions.push("created_at > ?");
           params.push(opts.after);
@@ -327,7 +353,13 @@ export function createMessageStore(
         params.push(opts.limit);
       }
 
-      const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC, id DESC ${limitClause}`;
+      // Tiebreak on rowid, NOT id: created_at is second-granular (datetime('now')) and ids are
+      // random UUIDs, so `id DESC` ordered same-second bursts at random — measured at 45% of tie
+      // groups mis-ordered against true insertion order in production (adj-cax0y). rowid IS
+      // insertion order, so this is deterministic and chronological. The created_at STRING FORMAT
+      // is deliberately left alone: iOS parses it with fixed formatters, so adding sub-second
+      // precision would have broken those consumers instead.
+      const sql = `SELECT * FROM messages ${where} ORDER BY created_at DESC, rowid DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
       const messages = rows.map(rowToMessage);
       // adj-203.2.6: batch-hydrate attachments in ONE query (avoids N+1 on the
@@ -386,7 +418,7 @@ export function createMessageStore(
         params.push(opts.limit);
       }
 
-      const sql = `SELECT m.* FROM messages m WHERE ${where} ORDER BY m.created_at DESC ${limitClause}`;
+      const sql = `SELECT m.* FROM messages m WHERE ${where} ORDER BY m.created_at DESC, m.rowid DESC ${limitClause}`;
       const rows = db.prepare(sql).all(...params) as MessageRow[];
       return rows.map(rowToMessage);
     },
@@ -403,7 +435,7 @@ export function createMessageStore(
           COUNT(*) as unread_count,
           (SELECT body FROM messages m2
            WHERE m2.agent_id = m.agent_id AND m2.delivery_status != 'read'
-           ORDER BY m2.created_at DESC LIMIT 1) as latest_body,
+           ORDER BY m2.created_at DESC, m2.rowid DESC LIMIT 1) as latest_body,
           MAX(created_at) as latest_created_at
         FROM messages m
         WHERE delivery_status != 'read' AND role != 'user'
@@ -440,7 +472,7 @@ export function createMessageStore(
         SELECT
           thread_id,
           COUNT(*) as message_count,
-          (SELECT body FROM messages m2 WHERE m2.thread_id = messages.thread_id ORDER BY created_at DESC LIMIT 1) as latest_body,
+          (SELECT body FROM messages m2 WHERE m2.thread_id = messages.thread_id ORDER BY created_at DESC, rowid DESC LIMIT 1) as latest_body,
           MAX(created_at) as latest_created_at,
           agent_id
         FROM messages

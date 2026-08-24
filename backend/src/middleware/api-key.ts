@@ -91,3 +91,39 @@ export const apiKeyAuth: RequestHandler = (req, res, next) => {
   next();
   return;
 };
+
+/**
+ * Fail-closed API key requirement for individually sensitive routes (adj-4lp30).
+ *
+ * {@link apiKeyAuth} is deliberately permissive: "if no API keys are configured, allow all
+ * (open mode for development)". That default is what left POST /api/bridge/tool — a read surface
+ * over the whole fleet, returning channel titles, member lists and message bodies — answering
+ * anonymous requests from the public internet, because this deployment's key store holds zero
+ * keys. Being mounted behind apiKeyAuth bought it nothing.
+ *
+ * This guard never opens. A route wearing it requires a valid key whether or not the server has
+ * any configured, so "we never provisioned a key" can never silently mean "everyone is welcome".
+ *
+ * Responses are a uniform 401 for missing, malformed, and invalid keys alike — an attacker must
+ * not be able to tell from the outside whether the server has keys configured at all.
+ *
+ * Apply it per-route rather than to a whole router: sibling routes may be intentionally reachable
+ * (POST /api/bridge/session is how the web voice path starts), and blanket-gating them would trade
+ * a security fix for an outage.
+ */
+export const requireApiKey: RequestHandler = (req, res, next) => {
+  const token = extractBearerToken(req.headers.authorization);
+
+  if (token === null || !validateApiKey(token)) {
+    logWarn("request rejected: route requires an API key (fail-closed)", {
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+      presented: token !== null,
+    });
+    res.status(401).json(unauthorized("API key required"));
+    return;
+  }
+
+  next();
+};

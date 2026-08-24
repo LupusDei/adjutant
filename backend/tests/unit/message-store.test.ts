@@ -727,21 +727,32 @@ describe("message-store", () => {
 
       const refMsg = store.getMessage("msg-bbb")!;
 
-      // Use a non-existent beforeId with a valid timestamp
-      // The composite cursor (created_at = ? AND id < ?) should still work:
-      // it returns messages whose id sorts before the fabricated cursor id
+      // A cursor whose message no longer exists (deleted row, or a fabricated token).
+      //
+      // CONTRACT CHANGED in adj-cax0y. This used to compare the fabricated id
+      // LEXICOGRAPHICALLY against message ids, because `id` was the sort key — an arbitrary
+      // result, since ids are random UUIDs and carry no order. Ordering is now anchored to the
+      // monotonic rowid, and an unknown id has no rowid, so there is no position to resume from.
+      //
+      // The fallback is the strictly-older timestamp, chosen because it always TERMINATES. The
+      // inclusive alternative (created_at <= before) would re-return the cursor row itself, so a
+      // client paging on "oldest row I have" would never advance — a hang, which is worse than a
+      // degenerate cursor returning less.
       const result = store.getMessages({
         agentId: "agent-A",
         before: refMsg.createdAt,
         beforeId: "msg-bbb-deleted",
       });
 
-      // "msg-aaa" and "msg-bbb" sort before "msg-bbb-deleted" lexicographically
-      // So they should be returned, but not "msg-ccc"
+      // All three rows share a second here, so a strictly-older timestamp excludes them all.
+      // The point of the assertion is that the call is SAFE and bounded, not that it guesses.
       const resultIds = result.map((m) => m.id);
-      expect(resultIds).toContain("msg-aaa");
-      expect(resultIds).toContain("msg-bbb");
       expect(resultIds).not.toContain("msg-ccc");
+      expect(result.every((m) => m.createdAt < refMsg.createdAt)).toBe(true);
+
+      // And the healthy path — a cursor id that exists — still resumes exactly, losing nothing.
+      const exact = store.getMessages({ agentId: "agent-A", before: refMsg.createdAt, beforeId: "msg-bbb" });
+      expect(exact.map((m) => m.id)).toEqual(["msg-aaa"]);
     });
 
     it("should return hasMore:true when more messages exist beyond the limit", async () => {

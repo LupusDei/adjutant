@@ -40,15 +40,55 @@ describe("BRIDGE_RPC_TOOLS descriptors", () => {
     expect(names).not.toContain("decommission_agent");
   });
 
-  it("should describe read_messages with { agentId, limit } only — NO conversationId (read by agent name)", () => {
+  it("should describe read_messages with { agentId, channel, limit } only — NO conversationId (read by NAME)", () => {
     const read = BRIDGE_RPC_TOOLS.find((t) => t.name === "read_messages");
     expect(read).toBeDefined();
     const paramNames = read!.parameters.map((p) => p.name).sort();
     // conversationId is deliberately NOT advertised: the avatar kept asking for an id it can't get.
-    expect(paramNames).toEqual(["agentId", "limit"]);
+    // `channel` follows the same rule — it takes the channel's NAME, never its id (adj-6fg1g).
+    expect(paramNames).toEqual(["agentId", "channel", "limit"]);
     expect(paramNames).not.toContain("conversationId");
     expect(read!.description.toLowerCase()).toMatch(/recall|past|earlier|previous|history/);
     expect(read!.description.toLowerCase()).toMatch(/never need|no id|name/);
+    // The avatar must know channels are readable at all — otherwise it never asks (adj-6fg1g).
+    expect(read!.description.toLowerCase()).toContain("channel");
+  });
+
+  // adj-xbszj: the avatar recited its own tool description back to the Commander as a LIMIT —
+  // "I can only read messages from a specific channel or from a specific agent" — because adding
+  // the channel mode made the description read as a two-way choice and buried the rest. The
+  // description is a prompt: if it does not name a mode, that mode effectively does not exist.
+  it("should describe EVERY read_messages scope, including the no-argument and combined ones (adj-xbszj)", () => {
+    const read = BRIDGE_RPC_TOOLS.find((t) => t.name === "read_messages")!;
+    const desc = read.description.toLowerCase();
+
+    // 1. no arguments at all -> recent traffic across the fleet (the mode it forgot it had).
+    expect(desc).toMatch(/omit (everything|all)|no arguments|without any/);
+    // 2. an agent's DM thread with the Commander.
+    expect(desc).toContain("agentid");
+    // 3. a shared channel.
+    expect(desc).toContain("channel");
+    // 4. both together -> that agent's messages inside that channel.
+    expect(desc).toMatch(/both|together|combine|narrow/);
+
+    // The description must never present the scopes as an exhaustive either/or.
+    expect(desc).not.toMatch(/can only read|only reads?/);
+  });
+
+  it("should tell the avatar in its PERSONALITY that it can read the Commander's own recent traffic (adj-xbszj)", () => {
+    const p = BRIDGE_RPC_PERSONALITY.toLowerCase();
+    expect(p).toContain("read_messages");
+    // It must not be left believing a channel or an agent name is REQUIRED to read anything.
+    expect(p).toMatch(/omit|no arguments|without/);
+  });
+
+  it("should declare list_channels as a no-arg discovery tool that pairs with read_messages (adj-6fg1g)", () => {
+    const list = BRIDGE_RPC_TOOLS.find((t) => t.name === "list_channels");
+    expect(list).toBeDefined();
+    expect(list!.parameters).toEqual([]);
+    expect(list!.description.toLowerCase()).toContain("channel");
+    // It must point at the follow-up call, or the avatar lists channels and stops.
+    expect(list!.description).toContain("read_messages");
   });
 
   it("should describe spawn_worker with { agentType, project, task, confirm } and require confirmation", () => {

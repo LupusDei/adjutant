@@ -1,2 +1,2 @@
 export { AppError, errorHandler, notFoundHandler } from './error-handler.js';
-export { apiKeyAuth } from './api-key.js';
+export { apiKeyAuth, requireApiKey } from './api-key.js';

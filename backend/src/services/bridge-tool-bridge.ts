@@ -34,6 +34,7 @@ import { resolveAgentName } from "./bridge-agent-resolver.js";
 import type { EventStore } from "./event-store.js";
 import type { TimelineEvent } from "../types/events.js";
 import type { MessageStore } from "./message-store.js";
+import type { ChannelSummary, Conversation, ConversationStore } from "./conversation-store.js";
 import type { ProposalStore } from "./proposal-store.js";
 import type { AutoDevelopStore } from "./auto-develop-store.js";
 import type { QuestionService } from "./question-service.js";
@@ -55,6 +56,7 @@ export const BRIDGE_READONLY_TOOLS = [
   "query_memories",
   "list_projects",
   "list_timeline",
+  "list_channels",
 ] as const;
 
 export type BridgeToolName = (typeof BRIDGE_READONLY_TOOLS)[number];
@@ -82,6 +84,12 @@ export interface BridgeToolDeps {
   // adj-ni4dh — recent fleet activity: the avatar reads the SAME timeline the Timeline
   // tab renders (eventStore.getEvents) to summarize what's been happening across the fleet.
   eventStore: Pick<EventStore, "getEvents">;
+  // adj-6fg1g — the avatar DISCOVERS channels by name and reads one by name. Reads are
+  // deliberately NOT membership-gated: the Bridge speaks as the Layer-2 coordinator and is a
+  // non-member OBSERVER of most channels (a channel shared by several agents is exactly that
+  // case). This mirrors the adj-egziw operator exemption and stays read-only — the WS fan-out
+  // gate that keeps non-member AGENTS out of channel traffic (adj-2jy4u) is untouched.
+  conversationStore: Pick<ConversationStore, "listChannels" | "getMembers" | "getConversationsForMember">;
 }
 
 export interface BridgeToolRequest {
@@ -172,8 +180,14 @@ const READ_MESSAGES_TOTAL_BUDGET = 11000;
 const readMessagesArgs = z.object({
   agentId: z.string().min(1).optional(),
   conversationId: z.string().min(1).optional(),
+  /** A channel NAME (or, tolerated, its id) — resolved to a conversation id (adj-6fg1g). */
+  channel: z.string().min(1).optional(),
   limit: z.number().int().positive().optional(),
 });
+
+// The avatar only needs enough channels to NAME one; the RPC payload ceiling does the rest.
+// The per-channel member lookup below is bounded by this cap (<= 15 indexed SQLite reads).
+const LIST_CHANNELS_MAX = 15;
 
 // query_memories — the memory categories mirror the MCP memory tool's enum.
 const MEMORY_CATEGORY_ENUM = z.enum(["operational", "technical", "coordination", "project"]);
@@ -308,6 +322,8 @@ export function createBridgeToolBridge(deps: BridgeToolDeps): BridgeToolBridge {
           return runListProjects(projectId);
         case "list_timeline":
           return runListTimeline(deps, args, projectId);
+        case "list_channels":
+          return runListChannels(deps, projectId);
         default:
           // Unreachable — isAllowed already gated the set, but keep TS exhaustive.
           return reject(tool, projectId, "TOOL_NOT_ALLOWED", `Tool '${String(tool)}' is not callable.`);
@@ -343,6 +359,7 @@ const TOOL_READ_MESSAGES: BridgeToolName = "read_messages";
 const TOOL_QUERY_MEMORIES: BridgeToolName = "query_memories";
 const TOOL_LIST_PROJECTS: BridgeToolName = "list_projects";
 const TOOL_LIST_TIMELINE: BridgeToolName = "list_timeline";
+const TOOL_LIST_CHANNELS: BridgeToolName = "list_channels";
 
 /**
  * list_projects — the fleet-wide project roster (name + id) so the avatar can NAME which projects
@@ -653,6 +670,151 @@ function runGetAutoDevelopStatus(
 }
 
 /**
+ * Normalize a channel name for matching: case-folded, with every run of non-alphanumerics
+ * collapsed to a single "-". Voice input is the reason — the Commander says "fleet ops",
+ * the channel is titled "fleet-ops", and STT never agrees on punctuation.
+ */
+function normalizeChannelName(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The outcome of resolving a spoken channel name against the channel roster. */
+type ChannelMatch =
+  | { kind: "found"; id: string; title: string }
+  | { kind: "not_found"; available: string[] }
+  | { kind: "ambiguous"; matches: string[] };
+
+/**
+ * Resolve a spoken/typed channel reference to exactly ONE channel. An id is accepted (it is
+ * unique and free to check) but never required; otherwise the normalized title must match a
+ * single channel. A miss or a tie is an ERROR, never a guess: silently widening to an unscoped
+ * read would have the avatar narrate unrelated fleet traffic as if it were the channel.
+ */
+function resolveChannel(channels: readonly ChannelSummary[], raw: string): ChannelMatch {
+  const byId = channels.find((c) => c.id === raw.trim());
+  if (byId !== undefined) return { kind: "found", id: byId.id, title: byId.title ?? byId.id };
+
+  const wanted = normalizeChannelName(raw);
+  const matches = channels.filter((c) => normalizeChannelName(c.title ?? "") === wanted && wanted !== "");
+
+  if (matches.length === 1) {
+    const only = matches[0]!;
+    return { kind: "found", id: only.id, title: only.title ?? only.id };
+  }
+  if (matches.length > 1) return { kind: "ambiguous", matches: matches.map((c) => c.title ?? c.id) };
+  return { kind: "not_found", available: channels.map((c) => c.title ?? c.id) };
+}
+
+/**
+ * list_channels — the channel roster so the avatar can NAME a channel before reading it
+ * (adj-6fg1g). Without this the Bridge has no way to address a channel at all: read_messages
+ * could only widen to an agent's DM thread or fleet-wide traffic, so channels shared by
+ * several agents were invisible to it.
+ *
+ * REUSES conversationStore.listChannels — the SAME query the REST/MCP channel surfaces read
+ * (Constitution Rules 4 + 9). Members are resolved per channel so the avatar can say WHO is in
+ * the room; the roster is capped first, so this is at most LIST_CHANNELS_MAX indexed lookups
+ * and never scales with the number of channels in the fleet.
+ */
+function runListChannels(deps: BridgeToolDeps, projectId: string | null): BridgeToolResult {
+  const channels = deps.conversationStore.listChannels().slice(0, LIST_CHANNELS_MAX);
+  const data = channels.map((c) => ({
+    id: c.id,
+    title: c.title ?? c.id,
+    memberCount: c.memberCount,
+    members: deps.conversationStore.getMembers(c.id).map((m) => m.memberId),
+  }));
+  return ok(TOOL_LIST_CHANNELS, projectId, { channels: data, count: data.length });
+}
+
+/** The Commander's member id in every DM. */
+const OPERATOR_IDENTITY = "user";
+
+/** Upper bound on last-message lookups when several DM threads tie (adj-xbszj). */
+const DM_RANK_MAX = 12;
+
+/**
+ * Find the DM conversation between an agent and the Commander (adj-xbszj).
+ *
+ * The id is looked UP, never computed. `dmConversationId()` is documented as deterministic but
+ * does not reproduce the ids in the database: the live kerrigan<->user thread is dm_b969fd57...,
+ * while the helper returns dm_4bc608e9... for that exact membership, and no sha1/md5/sha256
+ * variant of the pair matches. Trusting the formula scopes every DM read to a conversation that
+ * does not exist.
+ *
+ * Lookup alone is not enough either. Production has THIRTEEN kind='dm' conversations whose members
+ * are {kerrigan, user}: one real thread plus twelve legacy rows the backfill keyed by thread id
+ * (proposal-reviews, bug-hunt, adj-067, emergency, proposal-<uuid>...), and those legacy rows
+ * contain OTHER agents' messages. So the choice is ranked:
+ *
+ *   1. Prefer the canonical `dm_` prefix — the form getOrCreateDm/dmConversationId produce.
+ *   2. Break remaining ties on the ACTUAL last message, not conversations.updated_at, which the
+ *      backfill stamped identically (2026-05-29 20:36:58) one second NEWER than the real thread —
+ *      sorting by it picks a legacy row every time. That is a shipped-and-observed failure, not a
+ *      hypothetical: the first version of this fix returned March proposal-review chatter from
+ *      valerian and reviewer-1 as "the kerrigan thread".
+ *   3. updated_at only as a final tiebreak.
+ *
+ * Casing duplicates are real too ({kerrigan,user} AND {Kerrigan,user}), so members match
+ * case-insensitively.
+ */
+function resolveAgentDmConversation(
+  deps: BridgeToolDeps,
+  canonical: string,
+  spoken: string,
+): Conversation | undefined {
+  const lookups = spoken !== canonical ? [canonical, spoken] : [canonical];
+  const byId = new Map<string, Conversation>();
+  for (const name of lookups) {
+    for (const conv of deps.conversationStore.getConversationsForMember(name)) byId.set(conv.id, conv);
+  }
+
+  const wanted = canonical.toLowerCase();
+  const candidates = [...byId.values()].filter((conv) => {
+    if (conv.kind !== "dm") return false;
+    const members = deps.conversationStore.getMembers(conv.id).map((m) => m.memberId);
+    return members.some((m) => m.toLowerCase() === wanted) && members.includes(OPERATOR_IDENTITY);
+  });
+
+  if (candidates.length <= 1) return candidates[0];
+
+  // Canonical DMs win outright over legacy thread-id rows.
+  const canonicalDms = candidates.filter((c) => c.id.startsWith("dm_"));
+  const pool = canonicalDms.length > 0 ? canonicalDms : candidates;
+  if (pool.length === 1) return pool[0];
+
+  // Still tied — ask the store when each thread last saw traffic. Bounded by DM_RANK_MAX so a
+  // voice-path read can never fan out into an unbounded number of queries.
+  const ranked = pool.slice(0, DM_RANK_MAX).map((conv) => {
+    const [newest] = deps.messageStore.getMessages({ conversationId: conv.id, limit: 1 });
+    return { conv, lastAt: newest?.createdAt ?? "" };
+  });
+  ranked.sort(
+    (a, b) =>
+      b.lastAt.localeCompare(a.lastAt) || (b.conv.updatedAt ?? "").localeCompare(a.conv.updatedAt ?? ""),
+  );
+  return ranked[0]?.conv;
+}
+
+/**
+ * Resolve a spoken/typed agent name to the canonical id (case/alias/phonetic: "Phoenix" → fenix).
+ *
+ * A non-match is NOT an error: message HISTORY is usually with agents that are no longer running,
+ * so they are absent from getAgents(). Falling back to the name as-is means an unknown name simply
+ * yields an empty result rather than a rejection the avatar has to explain.
+ */
+async function resolveSpokenAgentName(spoken: string): Promise<string> {
+  const agentsResult = await getAgents();
+  const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
+  const resolution = resolveAgentName(spoken, allAgents.map((a) => ({ id: a.id, name: a.name })));
+  return resolution.matched && resolution.canonical ? resolution.canonical : spoken;
+}
+
+/**
  * read_messages — let the avatar recall past agent/user communications so it can give the
  * Commander context on prior discussions (the gap the avatar flagged about itself, adj-202.11).
  * REUSES the SAME messageStore.getMessages the REST/MCP paths use — no new store.
@@ -673,26 +835,75 @@ async function runReadMessages(
   }
 
   const limit = Math.min(parsed.data.limit ?? READ_MESSAGES_DEFAULT_LIMIT, READ_MESSAGES_MAX_LIMIT);
-  const opts: { limit: number; agentId?: string; conversationId?: string } = { limit };
+  const opts: { limit: number; agentId?: string; senderId?: string; conversationId?: string } = { limit };
+  let channel: { id: string; title: string } | undefined;
+  let sender: string | undefined;
+  let agent: string | undefined;
+  /** Set when a DM-scoped read should retry via the legacy widening if it finds nothing. */
+  let legacyWideningFor: string | undefined;
 
-  // Resolve a spoken/typed agent name to the canonical id (case/alias/phonetic), mirroring
-  // get_agent_detail — so "Phoenix" filters to fenix's thread. An unresolvable name is a hard
-  // miss (don't silently widen to a fleet-wide read the Commander didn't ask for).
-  if (parsed.data.agentId !== undefined) {
-    // Resolve to a canonical LIVE-agent name when possible (Phoenix→fenix). But message HISTORY
-    // is usually with agents that are NOT currently running (so not in getAgents()), so a
-    // non-match is NOT an error — fall back to filtering by the provided name as-is (the store
-    // matches messages from/to that name; an unknown name simply yields an empty result).
-    const agentsResult = await getAgents();
-    const allAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
-    const resolution = resolveAgentName(parsed.data.agentId, allAgents.map((a) => ({ id: a.id, name: a.name })));
-    opts.agentId = resolution.matched && resolution.canonical ? resolution.canonical : parsed.data.agentId;
+  // Scope: conversationId (strictest) > a channel NAME > an agent's DM thread > fleet-wide.
+  // A channel and an agent COMBINE rather than compete (adj-xbszj): naming both reads that
+  // agent's messages inside that channel. They used to be mutually exclusive with the channel
+  // winning silently, so the avatar could ask a narrower question, receive the whole room with
+  // no error, and conclude its own reach was smaller than it is.
+  if (parsed.data.conversationId !== undefined) {
+    opts.conversationId = parsed.data.conversationId;
+  } else if (parsed.data.channel !== undefined) {
+    // adj-6fg1g — read a channel by NAME. No membership check: the Bridge observes channels it
+    // does not belong to (see the conversationStore dep note). Reads have never been
+    // membership-gated on any surface; the gate lives on the WS fan-out path and stays closed.
+    const match = resolveChannel(deps.conversationStore.listChannels(), parsed.data.channel);
+    if (match.kind === "ambiguous") {
+      return reject(
+        TOOL_READ_MESSAGES,
+        projectId,
+        "AMBIGUOUS_CHANNEL",
+        `More than one channel matches '${parsed.data.channel}': ${match.matches.join(", ")}. Ask which one.`,
+      );
+    }
+    if (match.kind === "not_found") {
+      const available = match.available.length > 0 ? match.available.join(", ") : "none";
+      return reject(
+        TOOL_READ_MESSAGES,
+        projectId,
+        "CHANNEL_NOT_FOUND",
+        `No channel named '${parsed.data.channel}'. Channels: ${available}.`,
+      );
+    }
+    channel = { id: match.id, title: match.title };
+    opts.conversationId = match.id;
+
+    // Optional narrowing: one speaker inside that room. A strict sender filter, because the
+    // DM-shaped agentId widening is ignored once a conversationId is set.
+    if (parsed.data.agentId !== undefined) {
+      sender = await resolveSpokenAgentName(parsed.data.agentId);
+      opts.senderId = sender;
+    }
+  } else if (parsed.data.agentId !== undefined) {
+    // No channel named — read that agent's DM THREAD with the Commander, scoped to the actual
+    // conversation. The old widening `(agent_id = ? OR (role='user' AND recipient = ?))` is not
+    // conversation-scoped: it swept the agent's CHANNEL posts into the thread and the size budget
+    // then truncated the batch, so "my thread with kerrigan" came back as a smear across scopes.
+    const canonical = await resolveSpokenAgentName(parsed.data.agentId);
+    const dm = resolveAgentDmConversation(deps, canonical, parsed.data.agentId);
+    if (dm !== undefined) {
+      opts.conversationId = dm.id;
+      agent = canonical;
+      // ~5% of recipient-bearing rows predate conversation_id, so keep a way back.
+      legacyWideningFor = canonical;
+    } else {
+      opts.agentId = canonical;
+      agent = canonical;
+    }
   }
 
-  // conversationId takes precedence in the store (strict scoping); pass it through when given.
-  if (parsed.data.conversationId !== undefined) opts.conversationId = parsed.data.conversationId;
-
-  const newestFirst = deps.messageStore.getMessages(opts);
+  let newestFirst = deps.messageStore.getMessages(opts);
+  // A DM conversation that exists but holds nothing usually means pre-conversation_id history.
+  // Returning "no messages" there would be a worse answer than the smear this replaced.
+  if (newestFirst.length === 0 && legacyWideningFor !== undefined) {
+    newestFirst = deps.messageStore.getMessages({ limit, agentId: legacyWideningFor });
+  }
   // Collapse control chars + whitespace and cap each body at READ_MESSAGES_BODY_MAX so a single
   // message comes through in FULL (not a 300-char preview). Keep unicode — the avatar needs the
   // real words to summarize what an agent said.
@@ -711,13 +922,21 @@ async function runReadMessages(
     const text = clean(m.body);
     if (keptNewestFirst.length > 0 && used + text.length > READ_MESSAGES_TOTAL_BUDGET) break;
     used += text.length;
-    keptNewestFirst.push({ from: m.agentId, to: m.recipient ?? "", text });
+    // A channel post has no 1:1 recipient — name the CHANNEL instead (adj-6fg1g), or the
+    // avatar narrates every post as having been said to nobody.
+    keptNewestFirst.push({ from: m.agentId, to: m.recipient ?? channel?.title ?? "", text });
   }
   const olderOmittedForSize = newestFirst.length - keptNewestFirst.length;
   // Present oldest → newest for natural narration of the prior discussion.
   const messages = keptNewestFirst.reverse();
 
   return ok(TOOL_READ_MESSAGES, projectId, {
+    // Which room this came from, when the read was scoped to a channel (adj-6fg1g), and which
+    // speaker it was narrowed to, so the avatar can say "kerrigan, in fleet-ops" (adj-xbszj).
+    ...(channel !== undefined ? { channel } : {}),
+    ...(sender !== undefined ? { sender } : {}),
+    // Whose thread this is, so the avatar can say "your thread with kerrigan" (adj-xbszj).
+    ...(agent !== undefined ? { agent } : {}),
     messages,
     count: messages.length,
     // So the avatar can say "showing the N most recent" when older ones were dropped for size.
