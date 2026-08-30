@@ -70,14 +70,25 @@ describe("ArtifactViewer (adj-j7az6.3.3)", () => {
     expect(frame.getAttribute("srcdoc")).toContain("Hello");
   });
 
-  it("sets a sandbox attribute that does NOT include allow-scripts", async () => {
+  it("grants allow-scripts but NEVER allow-same-origin (adj-artifact-js)", async () => {
     mockDownload();
     render(createElement(ArtifactViewer, { artifact, onClose: () => {} }));
 
     const frame = await screen.findByTitle(/artifact render/i);
     const sandbox = frame.getAttribute("sandbox");
     expect(sandbox).not.toBeNull();
-    expect(sandbox).not.toContain("allow-scripts");
+
+    // Artifacts are interactive pages, so scripts run.
+    expect(sandbox).toContain("allow-scripts");
+
+    // This is the assertion that actually matters: allow-scripts WITH allow-same-origin is the
+    // pairing that defeats the sandbox entirely, letting the document reach this app's DOM,
+    // storage and same-origin API. It must never appear alongside allow-scripts.
+    expect(sandbox).not.toContain("allow-same-origin");
+
+    // Escaping the sandbox via a popup was harmless while nothing could script; with scripts
+    // enabled it is a privilege escalation.
+    expect(sandbox).not.toContain("allow-popups-to-escape-sandbox");
   });
 
   it("does not combine allow-scripts with allow-same-origin (no sandbox escape)", async () => {

@@ -433,7 +433,12 @@ describe("MCP artifact authoring tools (adj-j7az6.2.1)", () => {
       const description = htmlField.description ?? "";
       expect(description.toLowerCase()).toContain("self-contained");
       expect(description.toLowerCase()).toContain("no external");
-      expect(description.toLowerCase()).toContain("no <script>");
+      // adj-artifact-js: the contract now ENCOURAGES inline JavaScript instead of banning it,
+      // and must state the one rule authors cannot discover by trial and error — that the page
+      // has no network access, so data has to be baked in.
+      expect(description.toLowerCase()).toContain("javascript is encouraged");
+      expect(description.toLowerCase()).toContain("connect-src 'none'");
+      expect(description.toLowerCase()).not.toContain("no <script>");
     });
   });
 });

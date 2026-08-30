@@ -20,7 +20,7 @@
  */
 
 import type { Artifact } from "../types/artifacts.js";
-import { sanitizeProposalHtml } from "./proposal-sanitize.js";
+import { sanitizeArtifactHtml } from "./proposal-sanitize.js";
 
 /**
  * The Content-Security-Policy for a composed artifact document. Artifacts are arbitrary
@@ -35,11 +35,27 @@ import { sanitizeProposalHtml } from "./proposal-sanitize.js";
  * Scripts, external connects, framing, and base/form targets stay denied.
  */
 export const ARTIFACT_DOCUMENT_CSP = [
+  // Nothing is permitted unless named below.
   "default-src 'none'",
+  // Artifacts are interactive: inline JavaScript RUNS (adj-artifact-js). 'unsafe-eval' is
+  // included because small chart/animation helpers commonly build functions at runtime, and it
+  // grants no extra reach once the outbound channels below are closed.
+  "script-src 'unsafe-inline' 'unsafe-eval'",
   "style-src 'unsafe-inline'",
-  "img-src data:",
+  // Local-only media. data:/blob: cover canvas exports and embedded assets; no remote host, so
+  // an <img> cannot be used as an exfiltration beacon.
+  "img-src data: blob:",
+  "font-src data:",
+  "media-src data: blob:",
+  // THE containment. A script may run but may NOT talk: no fetch, XHR, WebSocket, EventSource or
+  // sendBeacon. This is load-bearing rather than belt-and-braces, because origin isolation does
+  // not hold on this deployment — the API runs wildcard CORS in open mode, so any script able to
+  // call fetch() could read the fleet's messages, agents and beads.
+  "connect-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
+  "frame-src 'none'",
+  "object-src 'none'",
   "frame-ancestors 'none'",
 ].join("; ");
 
@@ -62,7 +78,7 @@ export function composeArtifactDocument(artifact: Artifact): string {
   // authored document's own <html>/<head>/<body>/<meta> wrappers down to a safe body
   // fragment (keeping its inline <style> blocks and content), which we then re-wrap in
   // our own minimal, trusted shell carrying the CSP.
-  const body = sanitizeProposalHtml(artifact.html);
+  const body = sanitizeArtifactHtml(artifact.html);
   const safeTitle = escapeHtml(artifact.title);
 
   return `<!DOCTYPE html>

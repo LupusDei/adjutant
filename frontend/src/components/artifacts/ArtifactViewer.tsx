@@ -25,11 +25,26 @@ export interface ArtifactViewerProps {
 }
 
 /**
- * Sandbox tokens for the embedded document. Deliberately omits `allow-scripts`
- * AND `allow-same-origin` — the document is static and self-contained, so it
- * needs neither, and withholding both removes every sandbox-escape vector.
+ * Sandbox tokens for the embedded document.
+ *
+ * `allow-scripts` is GRANTED (adj-artifact-js): artifacts are interactive pages — charts,
+ * toggles, simulations — and a static-only viewer made them impossible.
+ *
+ * `allow-same-origin` is still withheld, which is the important half. Without it the document
+ * runs in an OPAQUE origin: no access to this app's DOM, cookies, localStorage, or its
+ * same-origin API surface. Granting both together is the combination that defeats the sandbox
+ * entirely, so they are never both present.
+ *
+ * `allow-popups-to-escape-sandbox` is also withheld now. It let a popup break OUT of the sandbox
+ * and run with the opener's privileges — harmless while nothing could script, a privilege
+ * escalation the moment scripts are allowed.
+ *
+ * Defence in depth beyond the sandbox: the composed document carries `connect-src 'none'`, so
+ * even in its opaque origin a script cannot fetch, XHR, or WebSocket anywhere. That matters
+ * because the backend serves wildcard CORS in open mode — an opaque origin alone would NOT stop
+ * a script from reading the fleet API.
  */
-const SANDBOX = "allow-popups allow-popups-to-escape-sandbox";
+const SANDBOX = "allow-scripts allow-popups";
 
 export function ArtifactViewer({ artifact, onClose }: ArtifactViewerProps) {
   const [doc, setDoc] = useState<string | null>(null);

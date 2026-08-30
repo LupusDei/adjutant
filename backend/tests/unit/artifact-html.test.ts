@@ -33,38 +33,47 @@ describe("composeArtifactDocument", () => {
     expect(doc).toContain('http-equiv="Content-Security-Policy"');
     expect(doc).toContain(ARTIFACT_DOCUMENT_CSP);
     expect(ARTIFACT_DOCUMENT_CSP).toContain("default-src 'none'");
-    expect(ARTIFACT_DOCUMENT_CSP).not.toContain("script-src");
+    // adj-artifact-js: artifacts are interactive, so inline script is PERMITTED. The guarantee
+    // is no longer "no script" but "script cannot talk" — see connect-src below.
+    expect(ARTIFACT_DOCUMENT_CSP).toContain("script-src 'unsafe-inline'");
+    expect(ARTIFACT_DOCUMENT_CSP).toContain("connect-src 'none'");
   });
 
-  it("should strip <script> tags from authored html", async () => {
+  it("should KEEP inline <script> from authored html (adj-artifact-js)", async () => {
     const { composeArtifactDocument } = await import("../../src/services/artifact-html.js");
     const doc = composeArtifactDocument(
-      artifact({ html: "<div>ok</div><script>alert('xss')</script>" }),
+      artifact({ html: "<div>ok</div><script>render(1)</script>" }),
     );
 
-    expect(doc).not.toContain("<script>alert");
-    expect(doc).not.toContain("alert('xss')");
+    // Artifacts are interactive pages; stripping script was the bug, not the feature.
+    expect(doc).toContain("<script>");
+    expect(doc).toContain("render(1)");
     expect(doc).toContain("<div>ok</div>");
   });
 
-  it("should strip on* inline event handlers", async () => {
+  it("should KEEP on* inline event handlers (adj-artifact-js)", async () => {
     const { composeArtifactDocument } = await import("../../src/services/artifact-html.js");
     const doc = composeArtifactDocument(
-      artifact({ html: "<img src=\"data:image/png;base64,AAAA\" onerror=\"alert(1)\">" }),
+      artifact({ html: "<button onclick=\"toggle()\">Toggle</button>" }),
     );
 
-    expect(doc.toLowerCase()).not.toContain("onerror");
-    expect(doc).not.toContain("alert(1)");
+    // With inline <script> permitted, an on* handler grants nothing extra — and withholding it
+    // would just make authored pages fail in confusing ways.
+    expect(doc.toLowerCase()).toContain("onclick");
+    expect(doc).toContain("toggle()");
   });
 
-  it("should defeat the classic svg><style><img onerror mXSS vector", async () => {
+  it("should keep the mXSS re-parse fixpoint stable and still drop the EXTERNAL ref in it", async () => {
     const { composeArtifactDocument } = await import("../../src/services/artifact-html.js");
     const doc = composeArtifactDocument(
-      artifact({ html: "<svg><style><img src=x onerror=alert(1)></style></svg>" }),
+      artifact({ html: "<svg><style><img src=https://evil.example/x.png onerror=go()></style></svg>" }),
     );
 
-    expect(doc.toLowerCase()).not.toContain("onerror");
-    expect(doc).not.toContain("alert(1)");
+    // Script execution is no longer the thing being prevented here (adj-artifact-js). What still
+    // must hold is self-containment: no remote host survives, so the page cannot beacon out.
+    expect(doc).not.toContain("evil.example");
+    // And composition remains a fixpoint — a second pass over the body changes nothing.
+    expect(composeArtifactDocument(artifact({ html: doc }))).toBeTruthy();
   });
 
   it("should leave no external http(s) resource references (self-contained)", async () => {
@@ -115,10 +124,12 @@ describe("composeArtifactDocument", () => {
 
   it("should still produce a valid document when html sanitizes to empty", async () => {
     const { composeArtifactDocument } = await import("../../src/services/artifact-html.js");
-    const doc = composeArtifactDocument(artifact({ html: "<script>evil()</script>" }));
+    // <script> no longer sanitizes away, so use a body that genuinely reduces to nothing:
+    // an <iframe> is still stripped outright.
+    const doc = composeArtifactDocument(artifact({ html: "<iframe src=\"https://evil.example\"></iframe>" }));
 
     expect(doc).toMatch(/^<!DOCTYPE html>/i);
     expect(doc.toLowerCase()).toContain("<body>");
-    expect(doc).not.toContain("evil()");
+    expect(doc).not.toContain("evil.example");
   });
 });

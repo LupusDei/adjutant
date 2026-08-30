@@ -232,6 +232,40 @@ in-app reading of PRIVATE proposals — web renders the html in a **sandboxed `<
 (no `allow-scripts`), iOS via `WKWebView.loadHTMLString`. Both consume the same composed
 document, so there is no per-surface rendering logic.
 
+### Artifacts run JavaScript — "may run, may not talk" (adj-artifact-js)
+
+Artifacts (`/a/:token`, the in-app `ArtifactViewer`, and the `.html` download) are **interactive
+pages**: inline `<script>` and `on*` handlers are permitted and encouraged. Proposals are NOT —
+they stay static documents on the original strip-everything contract. Both share
+`proposal-sanitize.ts`, which now exposes two entry points:
+
+- `sanitizeProposalHtml()` — unchanged; strips `<script>`, `on*`, `javascript:`.
+- `sanitizeArtifactHtml()` — same tag/attribute allow-list, same CSS neutralization, same mXSS
+  re-parse fixpoint, **plus** inline scripts, `on*` handlers, and interactive elements
+  (`<button>`, `<input>`, `<select>`, `<textarea>`, `<canvas>`, …). Every attribute is dropped
+  from `<script>`, so an external `src` is still impossible.
+
+**The containment is the CSP, not the sanitizer.** `ARTIFACT_DOCUMENT_CSP` allows
+`script-src 'unsafe-inline' 'unsafe-eval'` but sets `default-src 'none'`, **`connect-src 'none'`**,
+`img-src data: blob:`, `form-action 'none'`, `base-uri 'none'`, `object-src`/`frame-src 'none'`.
+A script may run; it may not fetch, XHR, WebSocket, beacon, or load a remote image.
+
+**Why the CSP and not origin isolation.** Origin isolation does not hold on this deployment:
+`app.use(cors())` serves wildcard CORS and `apiKeyAuth` runs in open mode with zero keys
+configured, so *any* script that can call `fetch()` — including one in an opaque-origin sandboxed
+iframe — could read the fleet's messages, agents, and beads. Closing the outbound channels is
+what actually contains it. If keys are ever provisioned and CORS tightened, this stays correct;
+it just stops being the only thing standing between an artifact and the API.
+
+The in-app viewer adds defence in depth: `sandbox="allow-scripts allow-popups"` — **never**
+`allow-same-origin` (that pairing defeats the sandbox), and no
+`allow-popups-to-escape-sandbox` (a privilege escalation once scripts run).
+
+**Residual risk, accepted and documented**: CSP cannot block top-level/popup *navigation*, so a
+determined artifact could still put data in a URL it navigates to. Self-containment (no external
+refs survive sanitization) is what keeps that from being trivial, which makes those
+external-reference tests more load-bearing now than before, not less.
+
 ### Per-Project Style Guide + Dark/Accessible Baseline (adj-201)
 
 Extends proposal sharing with a per-project **style guide** and a baked-in

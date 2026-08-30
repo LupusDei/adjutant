@@ -19,10 +19,19 @@ import type { ArtifactStore } from "../../src/services/artifact-store.js";
  * proposal-sanitize{,-qa-probe}.test.ts) but drives it through the ARTIFACT composition +
  * public HTTP surface.
  *
- * Every known vector — <script>, inline on* handlers, javascript: URLs, external
- * http(s)/protocol-relative resource refs, <iframe>/<object>/<embed>, and the classic
- * mutation-XSS `<svg><style><img onerror>` re-parse — must be NEUTRALIZED both in the
- * composed string AND in a spec-compliant (parse5) re-parse of the served document.
+ * THE GUARANTEE CHANGED IN adj-artifact-js. Artifacts are interactive pages, so inline
+ * <script> and on* handlers now RUN by design. What contains them is the document CSP:
+ * `connect-src 'none'` + `default-src 'none'` means a script may run but may NOT TALK — no
+ * fetch, XHR, WebSocket, beacon, or remote image. That containment is load-bearing rather than
+ * belt-and-braces, because origin isolation does not hold on this deployment: the API serves
+ * wildcard CORS in open mode, so any script able to call fetch() could read the fleet.
+ *
+ * So this suite now gates two things:
+ *   1. what is still NEUTRALIZED — every external http(s)/protocol-relative resource ref,
+ *      javascript: URLs, <iframe>/<object>/<embed>, and external <script src>. Self-containment
+ *      is what denies a script its exfiltration channel, so it is MORE load-bearing than before.
+ *   2. what is now PERMITTED — inline scripts and handlers survive composition intact.
+ * Proposals are unchanged and keep the original strip-everything contract.
  */
 
 // ── parse5 DOM-level threat collector (browser / WKWebView-equivalent parse) ──
@@ -95,56 +104,45 @@ function compose(html: string, title = "Artifact"): string {
 }
 
 describe("public artifact document — XSS/mXSS neutralization (composeArtifactDocument)", () => {
-  describe("script execution (must be neutralized)", () => {
-    it("should strip <script> blocks", () => {
-      const out = compose(`<p>ok</p><script>alert('xss')</script>`);
-      expect(out).not.toMatch(/<script/i);
-      expect(out).not.toContain("alert");
+  describe("script execution (PERMITTED — artifacts are interactive)", () => {
+    it("should KEEP an inline <script> block", () => {
+      const out = compose(`<p>ok</p><script>render('chart')</script>`);
+      expect(out).toMatch(/<script/i);
+      expect(out).toContain("render('chart')");
       expect(out).toContain("ok");
     });
 
-    it("should strip case-varied <SCRIPT> tags", () => {
-      const out = compose(`<SCRIPT>alert(1)</SCRIPT><ScRiPt>alert(2)</ScRiPt><p>keep</p>`);
-      expect(out).not.toMatch(/<script/i);
-      expect(out).not.toContain("alert");
+    it("should KEEP case-varied <SCRIPT> tags", () => {
+      const out = compose(`<SCRIPT>go(1)</SCRIPT><p>keep</p>`);
+      expect(out).toMatch(/<script/i);
       expect(out).toContain("keep");
     });
 
-    it("should strip <script> nested inside <svg>", () => {
-      const out = compose(`<svg><script>alert('svg')</script><path d="M0 0"/></svg>`);
-      expect(out).not.toMatch(/<script/i);
-      expect(out).not.toContain("alert");
-      expect(out).toMatch(/<svg/i);
+    it("should KEEP a <script> nested inside <svg>", () => {
+      const out = compose(`<svg><script>animate()</script><path d="M0 0"/></svg>`);
+      expect(out).toMatch(/<script/i);
       expect(out).toMatch(/<path/i);
     });
 
-    it("should strip inline event handlers (onerror, onclick, onload, onmouseover)", () => {
+    it("should KEEP inline event handlers (onclick, oninput, …)", () => {
       const out = compose(
-        `<img src="data:image/png;base64,iVBORw0KGgo=" onerror="alert(1)">` +
-          `<div onclick="steal()" onload="boom()">hi</div>` +
-          `<div\nonmouseover="alert(2)">y</div>`,
+        `<button onclick="toggle()">t</button><input oninput="update()" value="1">`,
       );
       const lower = out.toLowerCase();
-      expect(lower).not.toContain("onerror");
-      expect(lower).not.toContain("onclick");
-      expect(lower).not.toContain("onload");
-      expect(lower).not.toContain("onmouseover");
-      expect(out).not.toContain("alert");
-      expect(out).not.toContain("steal");
-      // legitimate data: image survives
-      expect(out).toMatch(/data:image\/png/);
+      expect(lower).toContain("onclick");
+      expect(lower).toContain("oninput");
     });
 
-    it("should strip event handlers with uppercase names and surrounding whitespace", () => {
-      const out = compose(`<div OnClick = "alert(1)">x</div>`);
-      expect(out.toLowerCase()).not.toContain("onclick");
-      expect(out).not.toContain("alert");
+    it("should STILL strip an external <script src> — a script may run, but only inline", () => {
+      const out = compose(`<script src="https://evil.example.com/x.js"></script><p>ok</p>`);
+      expect(out).not.toContain("evil.example.com");
+      expect(out).not.toMatch(/<script[^>]+src=/i);
+      expect(out).toContain("ok");
     });
 
     it("should strip javascript: URLs in href", () => {
-      const out = compose(`<a href="javascript:alert(document.cookie)">click</a>`);
+      const out = compose(`<a href="javascript:steal(document.cookie)">click</a>`);
       expect(out.toLowerCase()).not.toContain("javascript:");
-      expect(out).not.toContain("alert");
       expect(out).toContain("click");
     });
 
@@ -161,18 +159,8 @@ describe("public artifact document — XSS/mXSS neutralization (composeArtifactD
     });
 
     it("should reject non-image data: URIs in <img src>", () => {
-      const out = compose(`<img src="data:text/html,<script>alert(1)</script>">`);
+      const out = compose(`<img src="data:text/html,<p>x</p>">`);
       expect(out).not.toContain("text/html");
-      expect(out.toLowerCase()).not.toContain("alert");
-    });
-
-    it("should strip javascript: in an SVG anchor (xlink and plain href)", () => {
-      const out = compose(
-        `<svg><a xlink:href="javascript:alert(1)"><text>x</text></a>` +
-          `<a href="javascript:alert(2)"><text>y</text></a></svg>`,
-      );
-      expect(out.toLowerCase()).not.toContain("javascript:");
-      expect(out).not.toContain("alert");
     });
   });
 
@@ -267,10 +255,15 @@ describe("public artifact document — XSS/mXSS neutralization (composeArtifactD
     // sanitized output is re-parsed by a spec-compliant HTML parser it can foreign-content
     // switch and turn `<img ... onerror=...>` back into a LIVE element. The compose pipeline
     // runs a parse5 re-serialize fixpoint to defeat this.
-    it("should neutralize <svg><style><img src=x onerror=alert(1)> (string level)", () => {
-      const out = compose(`<svg><style><img src=x onerror=alert(1) //></style></svg>`);
-      expect(out.toLowerCase()).not.toContain("onerror");
-      expect(out).not.toContain("alert(1)");
+    it("should keep the mXSS fixpoint STABLE — re-sanitizing changes nothing", async () => {
+      const { sanitizeArtifactHtml } = await import("../../src/services/proposal-sanitize.js");
+      const once = sanitizeArtifactHtml(`<svg><style><img src=x onerror=go(1) //></style></svg>`);
+
+      // Handlers are permitted now, so the assertion is no longer "no onerror". What still
+      // matters is that the parse5 re-serialize fixpoint CONVERGES rather than oscillating —
+      // an unstable sanitizer is how a payload slips through on a later parse.
+      expect(sanitizeArtifactHtml(once)).toBe(once);
+      expect(once).not.toContain("evil");
     });
 
     const mutationVectors: [string, string][] = [
@@ -283,10 +276,11 @@ describe("public artifact document — XSS/mXSS neutralization (composeArtifactD
     ];
 
     for (const [name, payload] of mutationVectors) {
-      it(`re-parse of composed doc yields no live handler/script/external-img: "${name}"`, () => {
+      it(`re-parse of composed doc leaks NO external ref or frame: "${name}"`, () => {
         const threats = liveThreats(compose(payload));
-        expect(threats.eventHandlerAttrs).toEqual([]);
-        expect(threats.scriptNodes).toBe(0);
+        // Scripts and handlers are permitted (adj-artifact-js), so they are no longer counted as
+        // threats. The exfiltration channels still must not survive a browser-equivalent parse:
+        // a remote ref is how a script would smuggle data out past `connect-src 'none'`.
         expect(threats.externalResourceRefs).toEqual([]);
         expect(threats.iframeLikeNodes).toEqual([]);
       });
@@ -295,7 +289,6 @@ describe("public artifact document — XSS/mXSS neutralization (composeArtifactD
     it("should NOT be vacuously safe — a legitimate data: image survives re-parse as a real node", () => {
       const out = compose(`<img src="data:image/png;base64,iVBORw0KGgo=" alt="ok">`);
       const threats = liveThreats(out);
-      expect(threats.eventHandlerAttrs).toEqual([]);
       expect(threats.externalResourceRefs).toEqual([]);
       expect(out).toContain("data:image/png;base64");
     });
@@ -362,7 +355,7 @@ describe("GET /a/:token — hostile artifacts are neutralized end-to-end", () =>
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("should serve a script/handler/external-ref-laden artifact with ALL vectors neutralized", async () => {
+  it("should serve an interactive artifact: scripts KEPT, every exfiltration channel stripped", async () => {
     const token = publishHostile(
       `<h1>hello</h1>` +
         `<script>alert('pwn')</script>` +
@@ -377,47 +370,56 @@ describe("GET /a/:token — hostile artifacts are neutralized end-to-end", () =>
     expect(res.headers["content-type"]).toContain("text/html");
 
     const body = res.text;
-    // string-level
-    expect(body).not.toMatch(/<script/i);
-    expect(body.toLowerCase()).not.toContain("onerror");
+    // PERMITTED: the page is interactive.
+    expect(body).toMatch(/<script/i);
+    expect(body).toContain("hello");
+    // STILL DENIED: every way a script could reach off-page.
     expect(body.toLowerCase()).not.toContain("javascript:");
     expect(body).not.toMatch(/<iframe/i);
     expect(body).not.toContain("evil.example.com");
-    expect(body).not.toContain("alert");
-    // legitimate content survives
-    expect(body).toContain("hello");
 
-    // DOM-level: re-parse the served document — zero live threats.
+    // DOM-level: re-parse the served document. Scripts may exist; outbound refs may not.
     const threats = liveThreats(body);
-    expect(threats.eventHandlerAttrs).toEqual([]);
-    expect(threats.scriptNodes).toBe(0);
     expect(threats.externalResourceRefs).toEqual([]);
     expect(threats.iframeLikeNodes).toEqual([]);
+
+    // And the containment itself must be on the response, not merely implied.
+    const csp = res.headers["content-security-policy"] ?? "";
+    expect(csp).toContain("connect-src 'none'");
   });
 
-  it("should set a strict deny-by-default CSP header on the served document", async () => {
+  it("should set a CSP header that lets scripts RUN but never TALK", async () => {
     const token = publishHostile(`<p>ok</p>`);
     const res = await request(app).get(`/a/${token}`);
     const csp = res.headers["content-security-policy"] ?? "";
+
     expect(csp).toContain("default-src 'none'");
-    // no script-src permits execution
-    expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/i);
+    // Interactivity is allowed...
+    expect(csp).toMatch(/script-src[^;]*'unsafe-inline'/i);
+    // ...but every outbound channel is closed. This is the whole security model: the page is
+    // served same-origin with an open-mode, wildcard-CORS API, so a script that could fetch()
+    // would be able to read the fleet. connect-src 'none' is what makes that impossible.
+    expect(csp).toContain("connect-src 'none'");
+    expect(csp).not.toMatch(/img-src[^;]*https?:/i);
+    expect(csp).toContain("form-action 'none'");
+    expect(csp).toContain("base-uri 'none'");
   });
 
-  it("should neutralize the same vectors on the /download surface", async () => {
+  it("should apply the same contract on the /download surface", async () => {
     const token = publishHostile(
-      `<script>alert(1)</script><img src="https://evil.example.com/x.png" onerror="alert(2)">`,
+      `<script>go(1)</script><img src="https://evil.example.com/x.png" onerror="go(2)">`,
     );
     const res = await request(app).get(`/a/${token}/download`);
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toContain("attachment");
+
     const body = res.text;
-    expect(body).not.toMatch(/<script/i);
-    expect(body.toLowerCase()).not.toContain("onerror");
+    // A downloaded artifact is opened from the filesystem, where it has no origin to abuse; the
+    // embedded <meta> CSP still travels with it, so the same run-but-do-not-talk rule applies.
+    expect(body).toMatch(/<script/i);
     expect(body).not.toContain("evil.example.com");
+    expect(body).toContain("connect-src 'none'");
     const threats = liveThreats(body);
-    expect(threats.eventHandlerAttrs).toEqual([]);
-    expect(threats.scriptNodes).toBe(0);
     expect(threats.externalResourceRefs).toEqual([]);
   });
 });

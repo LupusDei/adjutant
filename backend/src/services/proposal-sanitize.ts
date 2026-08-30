@@ -72,6 +72,59 @@ const GLOBAL_ATTRS = [
   "clip-path", "marker-end", "marker-start", "marker-mid", "patternUnits", "maskUnits",
 ];
 
+/**
+ * Options that additionally permit INLINE JavaScript, used only by artifacts (adj-artifact-js).
+ *
+ * Artifacts are interactive pages — charts, toggles, simulations — so scripts are a feature there,
+ * while proposals remain static documents. The difference in blast radius is carried by the
+ * artifact document's CSP (`connect-src 'none'`, `default-src 'none'`), which lets a script RUN
+ * but not TALK. That matters because origin isolation alone would NOT contain a script here: the
+ * API runs wildcard CORS in open mode, so anything able to call fetch() could read the fleet.
+ *
+ * What stays stripped even in this mode:
+ *   - `<script src>` — every attribute is dropped from script tags, so an external script cannot
+ *     be referenced. Self-containment (NFR-002) is unchanged and the CSP would block it anyway.
+ *   - external stylesheets, remote images, and every other off-host resource reference.
+ */
+/**
+ * Interactive elements an artifact needs to be worth scripting. Allowing <script> while stripping
+ * <button> would have been a hollow feature — the handler would run with nothing to attach to.
+ * None of these can fetch or execute on their own; <form> is included for structure and semantics
+ * only, since the document CSP sets `form-action 'none'` so it cannot submit anywhere.
+ */
+const INTERACTIVE_TAGS = [
+  "button", "input", "select", "option", "optgroup", "datalist", "textarea",
+  "label", "fieldset", "legend", "form", "output", "progress", "meter", "canvas",
+];
+
+/** Attributes those elements need to be usable, none of which reference a remote resource. */
+const INTERACTIVE_ATTRS = [
+  "type", "value", "name", "placeholder", "checked", "selected", "disabled", "readonly",
+  "min", "max", "step", "rows", "cols", "maxlength", "minlength", "multiple", "pattern",
+  "for", "list", "width", "height", "autocomplete", "inputmode", "tabindex", "hidden",
+  "aria-live", "aria-expanded", "aria-controls", "aria-pressed", "aria-valuenow", "open",
+];
+
+function withInlineScripts(base: sanitizeHtml.IOptions): sanitizeHtml.IOptions {
+  return {
+    ...base,
+    allowedTags: [...(base.allowedTags as string[]), ...INTERACTIVE_TAGS, "script"],
+    allowedAttributes: {
+      ...(base.allowedAttributes as Record<string, string[]>),
+      // Wildcard event handlers: onclick, oninput, … Authors get the ergonomic form as well as
+      // addEventListener, so "my onclick vanished" is no longer a surprise.
+      "*": [...GLOBAL_ATTRS, ...INTERACTIVE_ATTRS, "data-*", "on*"],
+      // No attributes at all on <script> — this is what forbids `src`, keeping bodies inline-only.
+      script: [],
+    },
+    // `script` leaves nonTextTags so its TEXT is preserved verbatim rather than discarded.
+    nonTextTags: ["textarea", "option", "noscript"],
+    // Required by sanitize-html to allow <script> at all. Safe here only because the artifact CSP
+    // removes the exfiltration channels; do NOT lift this into the proposal path.
+    allowVulnerableTags: true,
+  };
+}
+
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [...SEMANTIC_TAGS, ...SVG_TAGS],
   allowedAttributes: {
@@ -251,10 +304,10 @@ function reserializeWithSpecParser(html: string): string {
  * served markup contains no element a compliant parser would mutate into a live
  * script/event-handler node — closing the mXSS class (adj-200.2.3.1).
  */
-function sanitizeToFixpoint(html: string): string {
-  let current = sanitizeHtml(html, SANITIZE_OPTIONS);
+function sanitizeToFixpoint(html: string, options: sanitizeHtml.IOptions = SANITIZE_OPTIONS): string {
+  let current = sanitizeHtml(html, options);
   for (let pass = 0; pass < MAX_REPARSE_PASSES; pass++) {
-    const next = sanitizeHtml(reserializeWithSpecParser(current), SANITIZE_OPTIONS);
+    const next = sanitizeHtml(reserializeWithSpecParser(current), options);
     if (next === current) return current; // stable under spec re-parse — done
     current = next;
   }
@@ -269,4 +322,21 @@ function sanitizeToFixpoint(html: string): string {
 export function sanitizeProposalHtml(html: string): string {
   if (!html) return "";
   return neutralizeCss(sanitizeToFixpoint(html));
+}
+
+/** Options singleton for the artifact path — built once, not per call. */
+const ARTIFACT_SANITIZE_OPTIONS = withInlineScripts(SANITIZE_OPTIONS);
+
+/**
+ * Sanitize an untrusted ARTIFACT HTML fragment, preserving inline JavaScript.
+ *
+ * Identical to {@link sanitizeProposalHtml} — same tag/attribute allow-list, same CSS
+ * neutralization, same mXSS re-parse fixpoint — except that inline `<script>` bodies and `on*`
+ * handlers are kept, because artifacts are interactive by design. External script references are
+ * still impossible. Proposals must keep using sanitizeProposalHtml: they are static documents and
+ * are served under a CSP that forbids scripts outright.
+ */
+export function sanitizeArtifactHtml(html: string): string {
+  if (!html) return "";
+  return neutralizeCss(sanitizeToFixpoint(html, ARTIFACT_SANITIZE_OPTIONS));
 }
