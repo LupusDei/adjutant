@@ -49,7 +49,7 @@ import { BRIDGE_DIRECTIVE_PREFIX } from "./services/bridge-rpc-tools.js";
 import { deliverDirectMessage } from "./services/direct-message-delivery.js";
 import { nudgeAgentViaBridge, answerQuestionViaBridge, createBeadViaBridge, spawnWorkerViaBridge, storeMemoryViaBridge, reinforceMemoryViaBridge, recordCorrectionViaBridge } from "./services/bridge-commands.js";
 import { getAgents } from "./services/agents-service.js";
-import { resolveAgentName } from "./services/bridge-agent-resolver.js";
+import { resolveAgentRecipient, resolveAgentRecipientOrThrow } from "./services/agent-recipient-resolver.js";
 import { createEventStore } from "./services/event-store.js";
 import { createQuestionStore } from "./services/question-store.js";
 import { createQuestionService } from "./services/question-service.js";
@@ -268,16 +268,10 @@ const bridgeToolBridge = createBridgeToolBridge({
 // name before any command tool delivers (the avatar said "Phoenix" for "fenix" and the
 // message vanished to a phantom recipient). No confident match throws — the dispatch
 // surfaces the message so the avatar asks the Commander instead of sending into the void.
-async function resolveBridgeAgent(spoken: string): Promise<string> {
-  const res = await getAgents();
-  const agents = res.success && res.data ? res.data.map((a) => ({ id: a.id, name: a.name })) : [];
-  const resolution = resolveAgentName(spoken, agents);
-  if (!resolution.matched || !resolution.canonical) {
-    const hint = resolution.candidates.length ? ` Did you mean: ${resolution.candidates.join(", ")}?` : "";
-    throw new Error(`No agent named "${spoken}".${hint}`);
-  }
-  return resolution.canonical;
-}
+// syl-j8fa.7: the body of this moved to services/agent-recipient-resolver.ts so the
+// direct_message MCP tool resolves names through the SAME rule instead of a second one
+// that can drift from it. Behaviour here, including the thrown message, is unchanged.
+const resolveBridgeAgent = resolveAgentRecipientOrThrow;
 
 // adj-202.6.2 — the per-session activity collector that turns Bridge conversations into
 // implicit learnings in the adjutant MemoryStore (the same store query_memories/store_memory use).
@@ -677,7 +671,12 @@ const server = app.listen(PORT_NUMBER, BIND_HOST, () => {
   // connecting agent gets a fully-tooled MCP server.
   // (adj-083 Bug 1: fixes race where agent gets zero tools)
   setToolRegistrar((server) => {
-    registerMessagingTools(server, messageStore, eventStore, conversationStore);
+    // syl-j8fa.7: direct_message validates its recipient against the live roster using
+    // the same resolver the Bridge path uses, so an unknown name fails as itself
+    // instead of persisting a message to a phantom recipient.
+    registerMessagingTools(server, messageStore, eventStore, conversationStore, {
+      resolveRecipient: resolveAgentRecipient,
+    });
     registerChannelTools(server, conversationStore);
     registerStatusTools(server, messageStore, eventStore);
     registerBeadTools(server, eventStore, proposalStore, messageDb);
