@@ -138,6 +138,33 @@ enum BridgeAudioPolicy {
         default: return .noChange
         }
     }
+
+    /// Whether a listen-only session should climb back to full-duplex (adj-207.3.3).
+    ///
+    /// `duplexMode` used to be a one-way ratchet — nothing ever set it back — so a
+    /// session that degraded because no mic existed at activation stayed listen-only
+    /// for its whole lifetime, even after the user connected AirPods.
+    ///
+    /// Recovery is deliberately narrow. ALL of these must hold:
+    ///   - the user's preferred mode was full-duplex (a listen-only preference is
+    ///     never "upgraded" against their wishes);
+    ///   - we are currently listen-only (otherwise there is nothing to do);
+    ///   - the degrade was the IMPLICIT "no input route" one, not an explicit
+    ///     `degradeToListenOnly` — a deliberate degrade (e.g. iOS killing the
+    ///     background mic) must not silently re-open the microphone, both because
+    ///     that is a privacy surprise and because it would loop the same failure;
+    ///   - a mic is genuinely available now.
+    static func shouldRestoreFullDuplex(
+        preferred: BridgeAudioDuplexMode,
+        current: BridgeAudioDuplexMode,
+        degradedForMissingInput: Bool,
+        inputAvailable: Bool
+    ) -> Bool {
+        preferred == .fullDuplex
+            && current == .listenOnly
+            && degradedForMissingInput
+            && inputAvailable
+    }
 }
 
 // MARK: - Bridge coordination seam
@@ -207,6 +234,15 @@ final class BridgeAudioSession {
     /// the UI indicator / diagnostics. `nil` while full-duplex.
     private(set) var listenOnlyReason: String?
 
+    /// The mode the caller asked for. Retained (not just consumed into
+    /// `duplexMode`) so a degrade can be un-done — see `restoreFullDuplexIfPossible`.
+    private let preferredMode: BridgeAudioDuplexMode
+
+    /// True when the CURRENT listen-only state came from the implicit "no input
+    /// route" guard rather than an explicit `degradeToListenOnly`. Only the
+    /// implicit kind is eligible to recover.
+    private var degradedForMissingInput = false
+
     /// Convenience for the SwiftUI listen-only indicator.
     var isListenOnly: Bool { duplexMode == .listenOnly }
 
@@ -223,6 +259,7 @@ final class BridgeAudioSession {
     ) {
         self.controller = controller
         self.duplexMode = preferredMode
+        self.preferredMode = preferredMode
         self.notificationCenter = notificationCenter
     }
 
@@ -239,8 +276,12 @@ final class BridgeAudioSession {
     /// fallback). Throws (and stays inactive) if the system rejects the config.
     func activate() throws {
         if duplexMode == .fullDuplex && !controller.isInputAvailable {
-            setListenOnly(reason: "no microphone input route available")
+            setListenOnly(reason: "no microphone input route available", missingInput: true)
         }
+        // The inverse: a mic came back while we were degraded and no route-change
+        // notification reached us (e.g. a plain foreground/background re-activate).
+        // State-only — `configure()` on the next line applies it.
+        restoreFullDuplexState()
         try configure()
         try controller.setActive(true, options: [])
         isActive = true
@@ -260,8 +301,34 @@ final class BridgeAudioSession {
     /// unreliable (US2), NOT a silent failure.
     func degradeToListenOnly(reason: String) {
         guard duplexMode != .listenOnly else { return }
-        setListenOnly(reason: reason)
+        setListenOnly(reason: reason, missingInput: false)
         try? configure()
+    }
+
+    /// Climb back to full-duplex if the policy allows (adj-207.3.3). Idempotent and
+    /// inert unless every condition in `BridgeAudioPolicy.shouldRestoreFullDuplex`
+    /// holds, so it is safe to call on any lifecycle edge.
+    func restoreFullDuplexIfPossible() {
+        guard restoreFullDuplexState() else { return }
+        try? configure()
+    }
+
+    /// State-only half of the restore, returning whether anything changed. Split
+    /// out so `activate()` — which configures unconditionally on the next line —
+    /// does not reconfigure the session twice on the recovery path.
+    @discardableResult
+    private func restoreFullDuplexState() -> Bool {
+        guard BridgeAudioPolicy.shouldRestoreFullDuplex(
+            preferred: preferredMode,
+            current: duplexMode,
+            degradedForMissingInput: degradedForMissingInput,
+            inputAvailable: controller.isInputAvailable
+        ) else { return false }
+
+        duplexMode = preferredMode
+        listenOnlyReason = nil
+        degradedForMissingInput = false
+        return true
     }
 
     // MARK: Disruption handlers
@@ -280,6 +347,9 @@ final class BridgeAudioSession {
     /// session when the previous device vanished; inert otherwise.
     func handleRouteChange(reason: AVAudioSession.RouteChangeReason) {
         apply(BridgeAudioPolicy.routeChangeActivation(reason: reason))
+        // A route change is also how a mic COMES BACK (headset/AirPods connect),
+        // which is the only signal that can lift a missing-input degrade.
+        restoreFullDuplexIfPossible()
     }
 
     // MARK: Observation wiring (production)
@@ -356,8 +426,9 @@ final class BridgeAudioSession {
         )
     }
 
-    private func setListenOnly(reason: String) {
+    private func setListenOnly(reason: String, missingInput: Bool) {
         duplexMode = .listenOnly
+        degradedForMissingInput = missingInput
         if listenOnlyReason == nil { listenOnlyReason = reason }
     }
 

@@ -141,6 +141,93 @@ final class BridgeAudioSessionTests: XCTestCase {
         XCTAssertEqual(session.listenOnlyReason, "first", "reason from the first degrade is retained")
     }
 
+    // MARK: - Listen-only recovery (adj-207.3.3, half b)
+
+    // Before this, `duplexMode` was a one-way ratchet: nothing ever set it back
+    // to `.fullDuplex`, so a session that degraded because no mic route existed
+    // at activation stayed listen-only for its ENTIRE lifetime — even after the
+    // user plugged in AirPods. The recovery is deliberately narrow: only an
+    // implicit "no input route" degrade recovers, and only when the user's
+    // preferred mode was full-duplex and a mic is actually back. An EXPLICIT
+    // degradeToListenOnly (background mic death) must NOT silently re-open the
+    // mic — see testExplicitDegradeDoesNotAutoRecover.
+
+    func testNewDeviceRestoresFullDuplexAfterNoInputDegrade() throws {
+        let (session, spy) = makeSession(preferred: .fullDuplex, inputAvailable: false)
+        try session.activate()
+        XCTAssertTrue(session.isListenOnly, "precondition: degraded for missing input")
+
+        // User plugs in a headset: a mic exists again.
+        spy.inputAvailable = true
+        session.handleRouteChange(reason: .newDeviceAvailable)
+
+        XCTAssertEqual(session.duplexMode, .fullDuplex)
+        XCTAssertFalse(session.isListenOnly)
+        XCTAssertNil(session.listenOnlyReason, "indicator must clear on recovery")
+        XCTAssertEqual(spy.categoryCalls.last?.mode, .voiceChat, "recovery must reconfigure for capture")
+    }
+
+    func testNewDeviceWithoutInputDoesNotRestoreFullDuplex() throws {
+        let (session, spy) = makeSession(preferred: .fullDuplex, inputAvailable: false)
+        try session.activate()
+        let priorConfigs = spy.categoryCalls.count
+
+        // A new OUTPUT-only device (e.g. AirPlay speaker) — still no mic.
+        session.handleRouteChange(reason: .newDeviceAvailable)
+
+        XCTAssertTrue(session.isListenOnly, "no mic → stay listen-only")
+        XCTAssertEqual(spy.categoryCalls.count, priorConfigs, "no spurious reconfigure")
+    }
+
+    func testExplicitDegradeDoesNotAutoRecover() throws {
+        let (session, _) = makeSession(preferred: .fullDuplex, inputAvailable: true)
+        try session.activate()
+        // The US2 scenario: iOS killed the background mic, so we degraded on purpose.
+        session.degradeToListenOnly(reason: "background mic suspended by iOS")
+
+        session.handleRouteChange(reason: .newDeviceAvailable)
+
+        XCTAssertTrue(session.isListenOnly, "a deliberate degrade must not silently re-open the mic")
+        XCTAssertEqual(session.listenOnlyReason, "background mic suspended by iOS")
+    }
+
+    func testListenOnlyPreferenceIsNeverUpgraded() throws {
+        // A user who asked for listen-only stays listen-only, mic or no mic.
+        let (session, _) = makeSession(preferred: .listenOnly, inputAvailable: true)
+        try session.activate()
+
+        session.handleRouteChange(reason: .newDeviceAvailable)
+
+        XCTAssertEqual(session.duplexMode, .listenOnly)
+    }
+
+    func testReactivateRestoresFullDuplexWhenInputReturns() throws {
+        // The other recovery path: no route-change notification, but the session
+        // is re-activated (foreground/background transition) after a mic returns.
+        let (session, spy) = makeSession(preferred: .fullDuplex, inputAvailable: false)
+        try session.activate()
+        XCTAssertTrue(session.isListenOnly)
+
+        spy.inputAvailable = true
+        try session.activate()
+
+        XCTAssertEqual(session.duplexMode, .fullDuplex)
+        XCTAssertNil(session.listenOnlyReason)
+    }
+
+    func testRecoveryIsIdempotent() throws {
+        let (session, spy) = makeSession(preferred: .fullDuplex, inputAvailable: false)
+        try session.activate()
+        spy.inputAvailable = true
+        session.handleRouteChange(reason: .newDeviceAvailable)
+        let afterFirst = spy.categoryCalls.count
+
+        session.handleRouteChange(reason: .newDeviceAvailable)
+
+        XCTAssertEqual(spy.categoryCalls.count, afterFirst, "already full-duplex → no extra reconfigure")
+        XCTAssertEqual(session.duplexMode, .fullDuplex)
+    }
+
     // MARK: - Interruptions (phone call / Siri)
 
     func testInterruptionBeganMarksInterruptedAndDeactivates() throws {
