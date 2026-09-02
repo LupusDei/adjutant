@@ -1,5 +1,12 @@
 # Dependencies
-node_modules/
+# NOTE the missing trailing slash. `node_modules/` matches DIRECTORIES ONLY, so a
+# node_modules SYMLINK — which is what scripts/provision-worktree.sh creates in every
+# worktree — was never ignored, and a routine `git add -A frontend` committed one.
+# Checking that commit out in the canonical repo replaced the real node_modules with a
+# link to ITSELF (git overwrites ignored paths without complaint), and the frontend
+# crash-looped on "Too many levels of symbolic links" until it was reinstalled by hand.
+# Matching without the slash covers the directory AND the symlink (adj-xugvt fallout).
+node_modules
 
 # Build outputs
 dist/
