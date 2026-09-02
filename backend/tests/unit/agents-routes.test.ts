@@ -2,13 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
-// Mock the agents-service before importing the router
-vi.mock("../../src/services/agents-service.js", () => ({
-  getAgents: vi.fn(),
+// Mock the fleet roster before importing the router.
+//
+// adj-xugvt: the route used to pass `agents-service.getAgents()` straight
+// through — the TMUX-derived listing — so an agent live over MCP with no local
+// session (a worktree agent, or the Grok-hosted "Adjudicator") was absent from
+// REST while MCP `list_agents` showed it. The route now serves the merged
+// roster, so REST and MCP answer with the same fleet.
+vi.mock("../../src/services/agent-roster.js", () => ({
+  getFleetRoster: vi.fn(),
 }));
 
 import { agentsRouter } from "../../src/routes/agents.js";
-import { getAgents } from "../../src/services/agents-service.js";
+import { getFleetRoster } from "../../src/services/agent-roster.js";
 import type { CrewMember } from "../../src/types/index.js";
 
 /**
@@ -45,10 +51,7 @@ describe("agents routes", () => {
 
   describe("GET /api/agents", () => {
     it("should return empty array when no agents", async () => {
-      vi.mocked(getAgents).mockResolvedValue({
-        success: true,
-        data: [],
-      });
+      vi.mocked(getFleetRoster).mockResolvedValue([]);
 
       const response = await request(app).get("/api/agents");
 
@@ -65,10 +68,7 @@ describe("agents routes", () => {
         createMockAgent({ id: "proj1/nux", name: "nux", type: "agent" }),
       ];
 
-      vi.mocked(getAgents).mockResolvedValue({
-        success: true,
-        data: mockAgents,
-      });
+      vi.mocked(getFleetRoster).mockResolvedValue(mockAgents);
 
       const response = await request(app).get("/api/agents");
 
@@ -88,10 +88,7 @@ describe("agents routes", () => {
         createMockAgent({ id: "scout", name: "scout", status: "offline" }),
       ];
 
-      vi.mocked(getAgents).mockResolvedValue({
-        success: true,
-        data: mockAgents,
-      });
+      vi.mocked(getFleetRoster).mockResolvedValue(mockAgents);
 
       const response = await request(app).get("/api/agents");
 
@@ -103,11 +100,8 @@ describe("agents routes", () => {
       expect(response.body.data[3].status).toBe("offline");
     });
 
-    it("should return 500 on service error", async () => {
-      vi.mocked(getAgents).mockResolvedValue({
-        success: false,
-        error: { code: "CLI_ERROR", message: "gt agents list command failed" },
-      });
+    it("should return 500 when the roster cannot be built at all", async () => {
+      vi.mocked(getFleetRoster).mockRejectedValue(new Error("gt agents list command failed"));
 
       const response = await request(app).get("/api/agents");
 
@@ -117,11 +111,8 @@ describe("agents routes", () => {
       expect(response.body.error.message).toBe("gt agents list command failed");
     });
 
-    it("should return 500 with default message on unknown error", async () => {
-      vi.mocked(getAgents).mockResolvedValue({
-        success: false,
-        error: undefined,
-      });
+    it("should return 500 with a default message when the failure carries none", async () => {
+      vi.mocked(getFleetRoster).mockRejectedValue(new Error(""));
 
       const response = await request(app).get("/api/agents");
 
@@ -130,16 +121,35 @@ describe("agents routes", () => {
       expect(response.body.error.message).toBe("Failed to get agents list");
     });
 
+    it("should list an agent that is live over MCP with no local session (adj-xugvt)", async () => {
+      // The Adjudicator case: MCP list_agents showed it, REST did not, and the
+      // coordinator concluded a real agent did not exist. Both must agree.
+      vi.mocked(getFleetRoster).mockResolvedValue([
+        { ...createMockAgent({ id: "kerrigan", name: "kerrigan" }), transport: "tmux", injectable: true },
+        {
+          ...createMockAgent({ id: "Adjudicator", name: "Adjudicator", project: null, status: "idle" }),
+          isLive: true,
+          transport: "mcp",
+          injectable: false,
+        },
+      ]);
+
+      const response = await request(app).get("/api/agents");
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((a: CrewMember) => a.name)).toEqual(["kerrigan", "Adjudicator"]);
+      // The distinction the old split hid: reachable, but not injectable.
+      expect(response.body.data[1].injectable).toBe(false);
+      expect(response.body.data[1].transport).toBe("mcp");
+    });
+
     it("should return agents with different types", async () => {
       const mockAgents = [
         createMockAgent({ type: "user" }),
         createMockAgent({ type: "agent" }),
       ];
 
-      vi.mocked(getAgents).mockResolvedValue({
-        success: true,
-        data: mockAgents,
-      });
+      vi.mocked(getFleetRoster).mockResolvedValue(mockAgents);
 
       const response = await request(app).get("/api/agents");
 

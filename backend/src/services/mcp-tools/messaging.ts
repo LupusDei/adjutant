@@ -359,6 +359,30 @@ export function registerMessagingTools(
             ],
           };
         }
+        // adj-xugvt: the name is RIGHT and the agent is REAL — it just has no
+        // session to type into (an off-platform/MCP-only client). Saying "no
+        // agent named X" here is a false existence claim, and on 2026-09-02 it
+        // sent the coordinator to the wrong conclusion, which then reached the
+        // General. Name the transport that does work instead.
+        if (resolution.status === "not-injectable" && resolution.canonical) {
+          logWarn("MCP direct_message rejected: recipient has no injectable session", {
+            agentId,
+            to: resolution.canonical,
+          });
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error:
+                    `Agent "${resolution.canonical}" exists but has no live session to inject into — ` +
+                    `it is connected over MCP only (no local tmux session). ` +
+                    `Use send_message to reach it. Nothing was sent — no message was stored.`,
+                }),
+              },
+            ],
+          };
+        }
         if (resolution.status === "resolved" && resolution.canonical) {
           recipient = resolution.canonical;
         }

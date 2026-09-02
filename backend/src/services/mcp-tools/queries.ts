@@ -10,7 +10,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getConnectedAgents } from "../mcp-server.js";
-import { getAgents } from "../agents-service.js";
+import { getFleetRoster } from "../agent-roster.js";
 import { execBd } from "../bd-client.js";
 import type { MessageStore } from "../message-store.js";
 import type { BeadsIssue } from "../bd-client.js";
@@ -30,6 +30,10 @@ interface AgentInfo {
   isLive?: boolean | undefined;
   /** adj-pyhm4: ISO timestamp of the last known status transition. */
   lastSeen?: string | undefined;
+  /** adj-xugvt: "tmux" (local session) or "mcp" (connection only). */
+  transport?: string | undefined;
+  /** adj-xugvt: whether direct_message prompt injection is possible at all. */
+  injectable?: boolean | undefined;
 }
 
 // ============================================================================
@@ -57,59 +61,32 @@ function registerListAgents(server: McpServer): void {
         .describe("Filter agents by status"),
     },
     async ({ status }) => {
-      // Gather MCP-connected agents
-      const connected = getConnectedAgents();
-      const connectedMap = new Map(
-        connected.map((c) => [
-          c.agentId,
-          {
-            sessionId: c.sessionId,
-            connectedAt: c.connectedAt.toISOString(),
-          },
-        ]),
-      );
+      // adj-xugvt: ONE roster for the fleet. This handler used to do its own
+      // merge of getConnectedAgents() + getAgents() while GET /api/agents served
+      // the tmux-derived listing alone — so the two disagreed about who exists,
+      // and a coordinator reading one made different decisions from a dashboard
+      // reading the other. Both now read `getFleetRoster()`, which also drops
+      // the placeholder `unknown-agent-*` connections that were being promoted
+      // to first-class agents here.
+      const roster = await getFleetRoster();
 
-      // Gather broader agent info from agents-service
-      const agentsResult = await getAgents();
-      const serviceAgents = agentsResult.success && agentsResult.data ? agentsResult.data : [];
-
-      // Build merged agent list, keyed by agent ID
-      const agentMap = new Map<string, AgentInfo>();
-
-      // Add all agents from the service
-      for (const agent of serviceAgents) {
-        const conn = connectedMap.get(agent.id);
-        agentMap.set(agent.id, {
-          agentId: agent.id,
-          status: agent.status,
-          currentTask: agent.currentTask,
-          sessionId: conn?.sessionId,
-          connectedAt: conn?.connectedAt,
-          lastActivity: agent.lastActivity,
-          // adj-pyhm4: pass through the stale-vs-live markers computed by
-          // agents-service.enrichWithMcpStatus so the coordinator sees the true
-          // roster (last-known status flagged stale) after a backend restart.
-          isLive: agent.isLive,
-          lastSeen: agent.lastSeen,
-        });
-      }
-
-      // Add MCP-connected agents not already in the service list
-      for (const [agentId, conn] of connectedMap) {
-        if (!agentMap.has(agentId)) {
-          agentMap.set(agentId, {
-            agentId,
-            status: "idle",
-            sessionId: conn.sessionId,
-            connectedAt: conn.connectedAt,
-            // Present as a live connection with no lifecycle entry.
-            isLive: true,
-            lastSeen: conn.connectedAt,
-          });
-        }
-      }
-
-      let agents = Array.from(agentMap.values());
+      let agents: AgentInfo[] = roster.map((entry) => ({
+        agentId: entry.id,
+        status: entry.status,
+        currentTask: entry.currentTask,
+        sessionId: entry.sessionId,
+        connectedAt: entry.connectedAt,
+        lastActivity: entry.lastActivity,
+        // adj-pyhm4: stale-vs-live markers, so the coordinator sees the true
+        // roster (last-known status flagged stale) after a backend restart.
+        isLive: entry.isLive,
+        lastSeen: entry.lastSeen,
+        // adj-xugvt: how this agent is reachable, and whether a prompt can be
+        // injected into a local session. An MCP-only agent is messageable via
+        // send_message but NOT injectable via direct_message.
+        transport: entry.transport,
+        injectable: entry.injectable,
+      }));
 
       // Apply status filter
       if (status === "active") {

@@ -65,9 +65,24 @@ export function setAgentStatusStore(store: AgentStatusStore | null): void {
   persistentStore = store;
 }
 
+/**
+ * Placeholder identities minted for MCP clients that connect without a usable
+ * `X-Agent-Id` (`resolveAgentId` in mcp-server.ts). They are sessions, not
+ * agents, and must never earn a permanent record.
+ */
+function isPlaceholderAgentId(agentId: string): boolean {
+  return agentId === "unknown" || agentId.startsWith("unknown-agent-");
+}
+
 /** Mirror a status transition into the persistent snapshot (best-effort). */
 function persistStatus(s: AgentStatus): void {
   if (!persistentStore) return;
+  // adj-xugvt: never persist a placeholder identity. Nothing removes
+  // agent_status rows (clearAgentStatus deliberately drops only the in-memory
+  // entry) and every boot re-hydrates them, so one row per identity-less
+  // connect accumulates forever in the map a coordinator's census reads. The
+  // live session is still tracked in memory; only the permanent record is refused.
+  if (isPlaceholderAgentId(s.agentId)) return;
   persistentStore.upsert({
     agentId: s.agentId,
     status: s.status,

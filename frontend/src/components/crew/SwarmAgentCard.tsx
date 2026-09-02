@@ -85,9 +85,15 @@ function SwarmAgentCardImpl({ agent, onNavigateToChat }: SwarmAgentCardProps) {
   const displayStatus = isBooting ? 'booting' : isActive ? 'active' : agent.status;
   const statusColor = getStatusColor(displayStatus);
   const isWorking = displayStatus === 'working' || displayStatus === 'active';
-  const canKill = (isOnline || isBooting) && !agent.isCoordinator && agent.sessionId;
+  // adj-xugvt: an MCP-only agent is now part of the roster the dashboard renders
+  // (REST used to omit it, which is how a real off-platform agent looked
+  // nonexistent). It HAS a session id — an MCP session — but nothing local to
+  // type into, so session-bound controls must stay hidden rather than fail when
+  // clicked. Absent `injectable` means an older payload: treat it as injectable.
+  const isInjectable = agent.injectable !== false;
+  const canKill = (isOnline || isBooting) && !agent.isCoordinator && agent.sessionId && isInjectable;
   const canAssign = displayStatus === 'idle' && isOnline;
-  const hasSession = Boolean(agent.sessionId) && (isOnline || isBooting);
+  const hasSession = Boolean(agent.sessionId) && isInjectable && (isOnline || isBooting);
 
   // D2: Kill agent state
   const [killState, setKillState] = useState<KillState>('idle');

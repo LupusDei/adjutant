@@ -98,6 +98,35 @@ describe("set_status write-through (adj-pyhm4)", () => {
     expect(row?.beadId).toBe("adj-ibcy6");
   });
 
+  // adj-xugvt: a status row for a placeholder identity is immortal — nothing
+  // removes agent_status rows, and every boot re-hydrates them. One row per
+  // identity-less MCP connect, forever, in the very map a coordinator's census
+  // reads. The connection is still tracked; only the permanent record is refused.
+  it("should NOT persist a status row for a placeholder unknown-agent-* identity", async () => {
+    setAgentStatusStore(statusStore);
+    mockGetAgentBySession.mockReturnValue("unknown-agent-482e7928");
+    const server = createFakeMcpServer();
+    registerStatusTools(server as never, createMessageStore(db));
+
+    await server.getTool("set_status")!.handler({ status: "working", task: "who am i" }, fakeExtra());
+
+    expect(statusStore.get("unknown-agent-482e7928")).toBeNull();
+    // Still tracked in memory for the life of the session — this is about the
+    // permanent record, not about hiding a live client from itself.
+    expect(getAgentStatuses().get("unknown-agent-482e7928")?.status).toBe("working");
+  });
+
+  it("should NOT persist a status row for the shared 'unknown' placeholder either", async () => {
+    setAgentStatusStore(statusStore);
+    mockGetAgentBySession.mockReturnValue("unknown");
+    const server = createFakeMcpServer();
+    registerStatusTools(server as never, createMessageStore(db));
+
+    await server.getTool("set_status")!.handler({ status: "idle" }, fakeExtra());
+
+    expect(statusStore.get("unknown")).toBeNull();
+  });
+
   it("should NOT throw when no store is wired (write-through is optional)", async () => {
     // no setAgentStatusStore call → persistentStore stays null
     mockGetAgentBySession.mockReturnValue("fenix");

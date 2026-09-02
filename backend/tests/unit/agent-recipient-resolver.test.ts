@@ -13,9 +13,13 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockGetAgents = vi.fn();
-vi.mock("../../src/services/agents-service.js", () => ({
-  getAgents: (...args: unknown[]) => mockGetAgents(...args),
+// adj-xugvt: the candidate set comes from the MERGED fleet roster now, not the
+// tmux-derived listing. An agent live over MCP with no local session used to be
+// missing from the candidate list entirely, so `direct_message` answered "No
+// agent named X" about an agent that had just messaged the coordinator.
+const mockGetFleetRoster = vi.fn();
+vi.mock("../../src/services/agent-roster.js", () => ({
+  getFleetRoster: (...args: unknown[]) => mockGetFleetRoster(...args),
 }));
 
 import {
@@ -23,13 +27,19 @@ import {
   resolveAgentRecipientOrThrow,
 } from "../../src/services/agent-recipient-resolver.js";
 
+/** Injectable (tmux-backed) agents — the classic roster. */
 function roster(...names: string[]) {
-  return { success: true, data: names.map((n) => ({ id: n, name: n })) };
+  return names.map((n) => ({ id: n, name: n, transport: "tmux", injectable: true }));
+}
+
+/** An agent that is live over MCP with no local session to inject into. */
+function mcpOnly(name: string) {
+  return { id: name, name, transport: "mcp", injectable: false };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetAgents.mockResolvedValue(roster("kerrigan", "raynor", "fenix"));
+  mockGetFleetRoster.mockResolvedValue(roster("kerrigan", "raynor", "fenix"));
 });
 
 describe("resolveAgentRecipient", () => {
@@ -51,7 +61,7 @@ describe("resolveAgentRecipient", () => {
   });
 
   it("reports unknown when a near-miss is ambiguous between two agents", async () => {
-    mockGetAgents.mockResolvedValue(roster("alpha", "alphb"));
+    mockGetFleetRoster.mockResolvedValue(roster("alpha", "alphb"));
     const res = await resolveAgentRecipient("alphc");
     expect(res.status).toBe("unknown");
     expect(res.candidates).toEqual(expect.arrayContaining(["alpha", "alphb"]));
@@ -59,21 +69,48 @@ describe("resolveAgentRecipient", () => {
 
   // The distinction the throwing helper could not make.
   it("reports roster-unavailable — NOT unknown — when the roster cannot be read", async () => {
-    mockGetAgents.mockResolvedValue({ success: false });
+    mockGetFleetRoster.mockRejectedValue(new Error("roster unreadable"));
     const res = await resolveAgentRecipient("kerrigan");
     expect(res.status).toBe("roster-unavailable");
   });
 
   it("reports roster-unavailable when the roster is empty", async () => {
-    mockGetAgents.mockResolvedValue(roster());
+    mockGetFleetRoster.mockResolvedValue(roster());
     const res = await resolveAgentRecipient("kerrigan");
     expect(res.status).toBe("roster-unavailable");
   });
 
-  it("reports roster-unavailable when getAgents throws, rather than propagating", async () => {
-    mockGetAgents.mockRejectedValue(new Error("tmux is not running"));
+  it("reports roster-unavailable when the roster lookup throws, rather than propagating", async () => {
+    mockGetFleetRoster.mockRejectedValue(new Error("tmux is not running"));
     const res = await resolveAgentRecipient("kerrigan");
     expect(res.status).toBe("roster-unavailable");
+  });
+  // adj-xugvt: the correction that matters most. An agent that EXISTS but has no
+  // injectable session is not an unknown name, and saying so cost a coordinator a
+  // wrong report to the General.
+  it("reports not-injectable — NOT unknown — for a live MCP-only agent", async () => {
+    mockGetFleetRoster.mockResolvedValue([...roster("kerrigan"), mcpOnly("Adjudicator")]);
+
+    const res = await resolveAgentRecipient("Adjudicator");
+
+    expect(res.status).toBe("not-injectable");
+    expect(res.canonical).toBe("Adjudicator");
+  });
+
+  it("resolves a mistranscribed MCP-only name and still marks it not-injectable", async () => {
+    mockGetFleetRoster.mockResolvedValue([...roster("kerrigan"), mcpOnly("Adjudicator")]);
+
+    const res = await resolveAgentRecipient("adjudicator");
+
+    expect(res).toMatchObject({ status: "not-injectable", canonical: "Adjudicator" });
+  });
+
+  it("still reports unknown for a name that matches nothing on either transport", async () => {
+    mockGetFleetRoster.mockResolvedValue([...roster("kerrigan"), mcpOnly("Adjudicator")]);
+
+    const res = await resolveAgentRecipient("nobody-at-all");
+
+    expect(res.status).toBe("unknown");
   });
 });
 
@@ -90,8 +127,17 @@ describe("resolveAgentRecipientOrThrow (the Bridge's existing contract)", () => 
     );
   });
 
+  it("throws a transport error — not a nonexistence claim — for an MCP-only agent", async () => {
+    mockGetFleetRoster.mockResolvedValue([mcpOnly("Adjudicator")]);
+
+    await expect(resolveAgentRecipientOrThrow("Adjudicator")).rejects.toThrow(
+      /has no live session.*send_message/i,
+    );
+    await expect(resolveAgentRecipientOrThrow("Adjudicator")).rejects.not.toThrow(/No agent named/);
+  });
+
   it("throws without a suggestion when there is nothing to suggest", async () => {
-    mockGetAgents.mockResolvedValue(roster());
+    mockGetFleetRoster.mockResolvedValue(roster());
     await expect(resolveAgentRecipientOrThrow("kerrigan")).rejects.toThrow('No agent named "kerrigan".');
   });
 });

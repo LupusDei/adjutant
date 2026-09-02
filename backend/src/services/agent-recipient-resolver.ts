@@ -20,12 +20,19 @@
  * contract byte-for-byte on top of this.
  */
 
-import { getAgents } from "./agents-service.js";
+import { getFleetRoster } from "./agent-roster.js";
 import { resolveAgentName } from "./bridge-agent-resolver.js";
 
 export type RecipientResolutionStatus =
-  /** A confident, unambiguous match against the roster. */
+  /** A confident, unambiguous match against the roster, with an injectable session. */
   | "resolved"
+  /**
+   * The name matched a REAL agent that has no injectable session — an
+   * off-platform/MCP-only client (adj-xugvt). It exists and is messageable via
+   * `send_message`; it simply cannot be typed into. Reporting this as "unknown"
+   * is what made a coordinator tell the General that a live agent did not exist.
+   */
+  | "not-injectable"
   /** The roster was read and this name is not a confident match for anything on it. */
   | "unknown"
   /** The roster could not be read (service failure, or nothing registered at all). */
@@ -33,7 +40,11 @@ export type RecipientResolutionStatus =
 
 export interface RecipientResolution {
   status: RecipientResolutionStatus;
-  /** Canonical messaging name to deliver to. Set iff `status === "resolved"`. */
+  /**
+   * Canonical messaging name. Set for `resolved` AND for `not-injectable` — in
+   * the latter case the agent is real and the name is correct, so callers can
+   * tell the sender exactly who to `send_message` instead.
+   */
   canonical?: string;
   /** Up to three closest names to suggest. Only meaningful when `status === "unknown"`. */
   candidates: string[];
@@ -50,13 +61,22 @@ export type RecipientResolver = (spoken: string) => Promise<RecipientResolution>
  * sender for an outage.
  */
 export async function resolveAgentRecipient(spoken: string): Promise<RecipientResolution> {
-  let agents: { id: string; name: string }[] = [];
+  // adj-xugvt: resolve against the MERGED fleet roster. This used to read the
+  // tmux-derived listing, so an agent live over MCP with no local session was
+  // not even a candidate — the resolver reported "no agent named X" about an
+  // agent that had just sent a message. The roster also carries `injectable`,
+  // which is what lets a transport problem stop masquerading as a bad name.
+  let roster: { id: string; name: string; injectable: boolean }[] = [];
   try {
-    const res = await getAgents();
-    agents = res.success && res.data ? res.data.map((a) => ({ id: a.id, name: a.name })) : [];
+    roster = (await getFleetRoster()).map((a) => ({
+      id: a.id,
+      name: a.name,
+      injectable: a.injectable,
+    }));
   } catch {
     return { status: "roster-unavailable", candidates: [] };
   }
+  const agents = roster.map((a) => ({ id: a.id, name: a.name }));
 
   // An empty roster is indistinguishable from a failed one for our purposes: either way
   // we have nothing to check against, so we must not claim the name is wrong.
@@ -64,6 +84,10 @@ export async function resolveAgentRecipient(spoken: string): Promise<RecipientRe
 
   const resolution = resolveAgentName(spoken, agents);
   if (resolution.matched && resolution.canonical) {
+    const matched = roster.find((a) => a.name === resolution.canonical || a.id === resolution.canonical);
+    if (matched && !matched.injectable) {
+      return { status: "not-injectable", canonical: resolution.canonical, candidates: [] };
+    }
     return { status: "resolved", canonical: resolution.canonical, candidates: [] };
   }
   return { status: "unknown", candidates: resolution.candidates };
@@ -77,6 +101,14 @@ export async function resolveAgentRecipient(spoken: string): Promise<RecipientRe
 export async function resolveAgentRecipientOrThrow(spoken: string): Promise<string> {
   const resolution = await resolveAgentRecipient(spoken);
   if (resolution.status === "resolved" && resolution.canonical) return resolution.canonical;
+  // A real agent on a transport we cannot inject into is NOT a bad name, and
+  // must never be reported as one (adj-xugvt).
+  if (resolution.status === "not-injectable" && resolution.canonical) {
+    throw new Error(
+      `Agent "${resolution.canonical}" has no live session to inject into — it is connected over MCP only. ` +
+        `Use send_message to reach it.`,
+    );
+  }
   const hint = resolution.candidates.length ? ` Did you mean: ${resolution.candidates.join(", ")}?` : "";
   throw new Error(`No agent named "${spoken}".${hint}`);
 }

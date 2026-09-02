@@ -9,7 +9,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { getAgents } from "../services/agents-service.js";
+import { getFleetRoster } from "../services/agent-roster.js";
 import { getSessionBridge } from "../services/session-bridge.js";
 import { pickRandomCallsign, nextAvailableName } from "../services/callsign-service.js";
 import { captureTmuxPane, listTmuxSessions } from "../services/tmux.js";
@@ -58,15 +58,23 @@ export const agentsRouter = Router();
  * Returns all agents as a CrewMember list for the crew stats dashboard.
  */
 agentsRouter.get("/", async (_req, res) => {
-  const result = await getAgents();
-
-  if (!result.success) {
-    return res.status(500).json(
-      internalError(result.error?.message ?? "Failed to get agents list")
-    );
+  // adj-xugvt: serve the MERGED fleet roster, not the tmux-derived listing.
+  //
+  // This route used to pass `getAgents()` straight through — tmux + bridge
+  // sessions only — while MCP `list_agents` served that same list UNIONED with
+  // the live MCP connection map. So an agent connected over MCP with no local
+  // session (a worktree agent, or the Grok-hosted "Adjudicator" on 2026-09-02)
+  // was present in one listing and absent from the other, and a coordinator
+  // reading the wrong one concluded a live agent did not exist. Both surfaces
+  // now read `getFleetRoster()`, and each entry carries `transport`/`injectable`
+  // so the identity-vs-injectable-session distinction is data, not a property of
+  // which endpoint you happened to call.
+  try {
+    return res.json(success(await getFleetRoster()));
+  } catch (error) {
+    const message = error instanceof Error && error.message.length > 0 ? error.message : "Failed to get agents list";
+    return res.status(500).json(internalError(message));
   }
-
-  return res.json(success(result.data));
 });
 
 /**

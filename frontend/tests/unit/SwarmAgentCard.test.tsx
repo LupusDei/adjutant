@@ -90,3 +90,51 @@ describe('SwarmAgentCard memoization (adj-139.4.6)', () => {
     expect(getByText('task-2')).toBeTruthy();
   });
 });
+
+/**
+ * adj-xugvt: an agent that is live over MCP with no local session is now part of
+ * the roster the dashboard renders (previously REST omitted it entirely, which
+ * is how a real off-platform agent looked nonexistent). Being visible must not
+ * mean being offered actions that cannot work: "kill" targets a tmux/bridge
+ * session it does not have, and the terminal stream has no pane to read.
+ *
+ * The backend marks the distinction on the entry itself (`injectable: false`),
+ * so the card gates on that rather than on the mere presence of a session id —
+ * an MCP-only agent HAS a session id, it is just not one we can type into.
+ */
+describe('SwarmAgentCard — MCP-only agents (adj-xugvt)', () => {
+  it('should not offer a kill control for a non-injectable agent', () => {
+    const { queryByLabelText } = render(
+      <SwarmAgentCard
+        agent={makeAgent({
+          name: 'Adjudicator',
+          sessionId: 'd9e010ea',
+          status: 'idle',
+          injectable: false,
+        })}
+      />,
+    );
+
+    expect(queryByLabelText('Kill Adjudicator')).toBeNull();
+  });
+
+  it('should still offer a kill control for a normal tmux-backed agent', () => {
+    const { queryByLabelText } = render(
+      <SwarmAgentCard
+        agent={makeAgent({ name: 'kerrigan', sessionId: 'sess-1', injectable: true })}
+      />,
+    );
+
+    expect(queryByLabelText('Kill kerrigan')).not.toBeNull();
+  });
+
+  it('should still offer a kill control when the backend says nothing about injectability', () => {
+    // Older payloads (and every existing test) omit the field; absence must not
+    // silently disable a working control.
+    const { queryByLabelText } = render(
+      <SwarmAgentCard agent={makeAgent({ name: 'kerrigan', sessionId: 'sess-1' })} />,
+    );
+
+    expect(queryByLabelText('Kill kerrigan')).not.toBeNull();
+  });
+});

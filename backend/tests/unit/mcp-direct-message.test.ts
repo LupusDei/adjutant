@@ -475,6 +475,31 @@ describe("direct_message recipient validation", () => {
     expect(mockWsBroadcast).not.toHaveBeenCalled();
   });
 
+  // adj-xugvt: the correction that cost the most. "Adjudicator" was live over MCP
+  // and had just messaged the coordinator, yet direct_message answered "No agent
+  // named 'Adjudicator'" — so the coordinator reported to the General that the
+  // agent was unreachable. It was reachable; the tool was wrong about the reason.
+  it("tells the caller an MCP-only agent has no session instead of claiming it does not exist", async () => {
+    const notInjectable: RecipientResolver = async () => ({
+      status: "not-injectable",
+      canonical: "Adjudicator",
+      candidates: [],
+    });
+
+    const tools = await registerTools(undefined, { resolveRecipient: notInjectable });
+    const data = parse(
+      await tools.get("direct_message")!.handler({ to: "Adjudicator", body: "go" }, { sessionId: "mcp-1" }),
+    );
+
+    const error = String(data["error"]);
+    expect(error).toContain("Adjudicator");
+    // Never an existence claim, and it must name the transport that DOES work.
+    expect(error).not.toContain("No agent named");
+    expect(error).toMatch(/send_message/);
+    // Same as the unknown-name path: nothing is half-sent.
+    expect(data["messageId"]).toBeUndefined();
+  });
+
   it("rejects an ambiguous near-miss and names the candidates it could have meant", async () => {
     const tools = await registerTools(undefined, { resolveRecipient: resolverOver("alpha", "alphb") });
     const data = parse(

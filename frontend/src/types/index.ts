@@ -58,6 +58,18 @@ export interface CrewMember {
   cost?: number;
   /** Estimated context window usage percentage (0-100) */
   contextPercent?: number;
+  /**
+   * adj-xugvt: how the fleet reaches this agent — "tmux" (a local session) or
+   * "mcp" (a connection only, e.g. an off-platform agent).
+   */
+  transport?: 'tmux' | 'mcp';
+  /**
+   * adj-xugvt: whether a prompt can be injected into a local session. An
+   * MCP-only agent is messageable but NOT injectable, so session-bound controls
+   * (kill, terminal stream) must not be offered for it. Absent means "unknown",
+   * which is treated as injectable so older payloads keep working.
+   */
+  injectable?: boolean;
 }
 
 // ============================================================================
