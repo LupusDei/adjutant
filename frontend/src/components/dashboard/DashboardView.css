@@ -1745,3 +1745,110 @@
   min-width: 55px;
   text-align: right;
 }
+
+/* Persona trait panel (adj-158.5.2) — the web half of the agent persona
+   display, expanded from the PERSONA/CUSTOM badge on an agent row. */
+.dashboard-agent-entry {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The badge is now a control, so it needs button reset + affordance. It keeps
+   the exact look it had as a <span> (.dashboard-agent-persona-badge above). */
+button.dashboard-agent-persona-badge {
+  background: none;
+  font: inherit;
+  font-size: 0.5rem;
+  cursor: pointer;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.dashboard-agent-persona-badge:hover,
+button.dashboard-agent-persona-badge[aria-expanded='true'] {
+  opacity: 1;
+  box-shadow: 0 0 6px var(--crt-phosphor-bloom);
+}
+
+.agent-persona-traits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 2px 0 6px 18px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--crt-phosphor-dim);
+  background: rgba(var(--crt-phosphor-rgb), 0.03);
+}
+
+.agent-persona-traits-loading,
+.agent-persona-traits-error {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  color: var(--crt-phosphor-dim);
+}
+
+.agent-persona-traits-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-persona-traits-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-persona-traits-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--crt-phosphor);
+  text-transform: uppercase;
+}
+
+.agent-persona-traits-description {
+  font-size: 0.6rem;
+  color: var(--crt-phosphor-dim);
+  overflow-wrap: anywhere;
+}
+
+/* Auto-fit rather than a fixed column count: this panel is nested inside an
+   agent row and has to survive a narrow overview column. */
+.agent-persona-traits-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 14px;
+}
+
+.agent-persona-traits-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-persona-traits-group-label {
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  color: var(--crt-phosphor-dim);
+  border-bottom: 1px solid var(--crt-phosphor-dim);
+  padding-bottom: 2px;
+  margin-bottom: 2px;
+}
+
+.agent-persona-traits-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.6rem;
+}
+
+.agent-persona-traits-label {
+  color: var(--crt-phosphor-dim);
+  letter-spacing: 0.04em;
+}
+
+.agent-persona-traits-value {
+  color: var(--crt-phosphor);
+  font-variant-numeric: tabular-nums;
+}

@@ -5,6 +5,7 @@ import { useProject } from '../../contexts/ProjectContext';
 import { api } from '../../services/api';
 import type { AutoDevelopStatus } from '../../types';
 import { getTimelineEvents, type TimelineEvent } from '../../services/api';
+import { AgentPersonaTraits } from '../personas/AgentPersonaTraits';
 import { timelineEventProject, timelineActionText } from './timelineRow';
 import { statusIndicatorClass, statusLabel } from './agentStatusDisplay';
 import type { AgentOverview, OverviewUnreadSummary } from '../../types/overview';
@@ -168,6 +169,11 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
   // --- Unread messages ---
   const unreadMessages: OverviewUnreadSummary[] = data?.unreadMessages ?? [];
 
+  /// Which agent row has its persona traits expanded (adj-158.5.2). One at a
+  /// time: the panel is a detail view, and several open at once turns the
+  /// overview into a wall.
+  const [expandedPersonaAgentId, setExpandedPersonaAgentId] = useState<string | null>(null);
+
   // --- Timeline events ---
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   // adj-pvp0x: guard against setState-after-unmount. The 15s timeline poll
@@ -252,8 +258,8 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
               {agents.length > 0 ? (
                 <div className="dashboard-agents-list">
                   {agents.map((agent) => (
+                    <div key={agent.id} className="dashboard-agent-entry">
                     <div
-                      key={agent.id}
                       className="dashboard-agent-row"
                       onClick={() => onNavigateToChat?.(agent.name)}
                       role={onNavigateToChat ? 'button' : undefined}
@@ -268,9 +274,21 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
                       <span className={`dashboard-crew-card-indicator dashboard-indicator-${statusIndicatorClass(agent.status)}`} />
                       <span className="dashboard-agent-name">{agent.name.toUpperCase()}</span>
                       {agent.personaId && (
-                        <span className="dashboard-agent-persona-badge">
+                        <button
+                          type="button"
+                          className="dashboard-agent-persona-badge"
+                          aria-expanded={expandedPersonaAgentId === agent.id}
+                          title="Show persona traits"
+                          onClick={(e) => {
+                            // The whole row navigates to chat; the badge must not.
+                            e.stopPropagation();
+                            setExpandedPersonaAgentId((current) =>
+                              current === agent.id ? null : agent.id,
+                            );
+                          }}
+                        >
                           {agent.personaSource === 'self-generated' ? 'PERSONA' : 'CUSTOM'}
-                        </span>
+                        </button>
                       )}
                       {agent.project && (
                         <span className="dashboard-agent-project">{agent.project}</span>
@@ -298,6 +316,10 @@ export function DashboardView({ onNavigateToChat }: DashboardViewProps) {
                       {agent.unreadCount > 0 && (
                         <span className="dashboard-unread-count">{agent.unreadCount}</span>
                       )}
+                    </div>
+                    {agent.personaId && expandedPersonaAgentId === agent.id && (
+                      <AgentPersonaTraits personaId={agent.personaId} />
+                    )}
                     </div>
                   ))}
                 </div>
