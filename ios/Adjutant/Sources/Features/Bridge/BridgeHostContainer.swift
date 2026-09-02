@@ -333,6 +333,14 @@ struct BridgeHostContainer<Content: View>: View {
         }
         // Route app foreground/background into the Bridge session so voice
         // continues while backgrounded (adj-207.3.2).
+        //
+        // This is the SINGLE owner of scenePhase -> Bridge routing (adj-207.3.4).
+        // ContentView used to carry a second, UNGUARDED copy of this dispatch;
+        // both fired on every phase change. The state machine absorbed the
+        // duplicate (enterBackground is only defined from .live), so it was a
+        // maintenance hazard rather than a live bug — but two unguarded copies of
+        // the same lifecycle rule is how a real divergence starts. Keep it here:
+        // the container owns the host, and `handleScenePhase` is state-guarded.
         .onChange(of: scenePhase) { _, newPhase in
             host.handleScenePhase(newPhase)
         }

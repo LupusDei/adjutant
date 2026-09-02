@@ -219,6 +219,41 @@ final class BridgeBackgroundAudioTests: XCTestCase {
         XCTAssertEqual(audio.startCount, 0)
     }
 
+    // adj-207.3.4: scenePhase was wired in TWO places — ContentView AND
+    // BridgeHostContainer — both routing the same phase change into the same
+    // session. ContentView's copy was also UNGUARDED. The duplicate is removed,
+    // but the invariant it depended on is worth pinning down: a repeated phase
+    // dispatch must not re-activate background audio, or any future re-introduced
+    // duplicate wiring becomes a real defect rather than a redundant no-op.
+
+    func testRepeatedBackgroundPhaseDoesNotRestartAudio() {
+        let (host, audio) = makeHost()
+        host.open()
+        host.session.markConnected()
+
+        host.handleScenePhase(.background)
+        let afterFirst = audio.startCount
+
+        host.handleScenePhase(.background)
+
+        XCTAssertEqual(audio.startCount, afterFirst, "duplicate background dispatch must not restart audio")
+        XCTAssertEqual(host.session.state, .backgrounded)
+    }
+
+    func testRepeatedActivePhaseDoesNotRestartAudio() {
+        let (host, audio) = makeHost()
+        host.open()
+        host.session.markConnected()
+        host.handleScenePhase(.background)
+        host.handleScenePhase(.active)
+        let afterFirst = audio.startCount
+
+        host.handleScenePhase(.active)
+
+        XCTAssertEqual(audio.startCount, afterFirst, "duplicate active dispatch must not restart audio")
+        XCTAssertEqual(host.session.state, .live)
+    }
+
     func testHostExposesListenOnlyIndicator() {
         let (host, audio) = makeHost()
         host.open()
