@@ -321,6 +321,74 @@ describe("personas-routes", () => {
   // PUT /api/personas/:id
   // ==========================================================================
 
+  // ==========================================================================
+  // GET /api/personas/:id/evolution  (adj-158.5.1)
+  // ==========================================================================
+
+  describe("GET /api/personas/:id/evolution", () => {
+    /**
+     * Creates a persona via the API and returns its id. The route reads
+     * through the real service against a migrated SQLite db, so evolution
+     * rows are seeded with the same service method the MCP tool uses.
+     */
+    async function createPersona(name: string): Promise<string> {
+      const res = await request(app)
+        .post("/api/personas")
+        .send({ name, traits: makeTraits({ technical_depth: 10 }) });
+      expect(res.status).toBe(201);
+      return res.body.data.id as string;
+    }
+
+    async function seedEvolution(personaId: string, count: number): Promise<void> {
+      const { createPersonaService } = await import("../../src/services/persona-service.js");
+      const service = createPersonaService(db);
+      for (let i = 0; i < count; i++) {
+        service.logEvolution(personaId, "technical_depth", 10 + i, 11 + i);
+      }
+    }
+
+    it("should return the evolution history for a persona", async () => {
+      const id = await createPersona("Evolver");
+      await seedEvolution(id, 3);
+
+      const res = await request(app).get(`/api/personas/${id}/evolution`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveLength(3);
+      expect(res.body.data[0].personaId).toBe(id);
+      expect(res.body.data[0].trait).toBe("technical_depth");
+      expect(typeof res.body.data[0].oldValue).toBe("number");
+      expect(res.body.data[0].changedAt).toBeTruthy();
+    });
+
+    it("should return 404 for an unknown persona id", async () => {
+      const res = await request(app).get("/api/personas/does-not-exist/evolution");
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it("should return an empty array for a persona that has never evolved", async () => {
+      const id = await createPersona("Static");
+
+      const res = await request(app).get(`/api/personas/${id}/evolution`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+    });
+
+    it("should honor the limit query param", async () => {
+      const id = await createPersona("Busy");
+      await seedEvolution(id, 5);
+
+      const res = await request(app).get(`/api/personas/${id}/evolution?limit=2`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(2);
+    });
+  });
+
   describe("PUT /api/personas/:id", () => {
     it("should update persona name", async () => {
       const traits = zeroTraits();
