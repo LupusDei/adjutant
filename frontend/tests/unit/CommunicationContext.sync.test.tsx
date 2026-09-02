@@ -275,3 +275,69 @@ describe("CommunicationContext sync_response handler", () => {
     expect(received.map((m) => m.id)).toEqual(["m1", "m2"]);
   });
 });
+
+/**
+ * adj-139.1.3.P — malformed `missed` payloads.
+ *
+ * `missed` is attacker/bug-reachable input: it arrives off the wire and is
+ * consumed by a `for...of` loop. A non-iterable value (42, {}, true) makes
+ * that loop throw a TypeError *inside* `ws.onmessage`, where nothing catches
+ * it — killing the frame mid-dispatch and leaving the socket handler in an
+ * inconsistent state (watermark half-advanced, later frames unprocessed).
+ * A string is iterable but yields characters, so it must not be treated as a
+ * message list either. The contract: anything that is not an array is an
+ * empty replay, and the handler survives to process the next frame.
+ */
+describe("CommunicationContext sync_response handler — malformed missed[]", () => {
+  const malformed: [string, unknown][] = [
+    ["a number", 42],
+    ["a plain object", { 0: "not-a-message" }],
+    ["a string", "chat_message"],
+    ["a boolean", true],
+  ];
+
+  for (const [label, value] of malformed) {
+    it(`should not throw and should deliver nothing when missed is ${label}`, async () => {
+      const { result } = renderHook(() => useCommunicationActions(), { wrapper });
+      await flushMicrotasks();
+
+      const received: { id: string }[] = [];
+      act(() => {
+        result.current.subscribe((msg) => received.push(msg));
+      });
+
+      expect(() => {
+        act(() => {
+          lastMockWs!._inject({ type: "sync_response", missed: value });
+        });
+      }).not.toThrow();
+
+      expect(received).toEqual([]);
+    });
+  }
+
+  it("should still process a well-formed frame after a malformed one", async () => {
+    const { result } = renderHook(() => useCommunicationActions(), { wrapper });
+    await flushMicrotasks();
+
+    const received: { id: string }[] = [];
+    act(() => {
+      result.current.subscribe((msg) => received.push(msg));
+    });
+
+    act(() => {
+      lastMockWs!._inject({ type: "sync_response", missed: 42 });
+    });
+
+    act(() => {
+      lastMockWs!._inject({
+        type: "sync_response",
+        missed: [
+          { type: "chat_message", id: "m1", from: "agent-x", to: "user", body: "one", timestamp: "2026-02-21T10:00:00Z", seq: 1 },
+        ],
+      });
+    });
+
+    expect(received.map((m) => m.id)).toEqual(["m1"]);
+  });
+});

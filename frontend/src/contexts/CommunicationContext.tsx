@@ -478,7 +478,14 @@ export function CommunicationProvider({ children }: { children: ReactNode }) {
             // Server replays messages we missed while disconnected.
             // Dedup by seq against the watermark — both for stale messages
             // already delivered and for duplicates within the payload itself.
-            const missed = msg.missed ?? [];
+            //
+            // `missed` is off-the-wire input consumed by a for...of. A
+            // non-iterable value (42, {}, true) would throw a TypeError inside
+            // ws.onmessage, where nothing catches it — killing the frame
+            // mid-dispatch and leaving the handler inconsistent. A string is
+            // iterable but yields characters, not messages. So: anything that
+            // is not an array is an empty replay (adj-139.1.3.P).
+            const missed = Array.isArray(msg.missed) ? msg.missed : [];
             for (const entry of missed) {
               if (entry.type !== 'chat_message') continue;
               if (!entry.id || !entry.from || !entry.to || !entry.body || !entry.timestamp) continue;
