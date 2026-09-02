@@ -5,6 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "preinstall": "node scripts/node-abi-stamp.mjs",
+    "postinstall": "node scripts/node-abi-stamp.mjs --stamp",
     "dev": "tsx watch src/index.ts",
     "build": "npm run lint && tsc && node scripts/copy-assets.mjs",
     "start": "node dist/index.js",
@@ -33,7 +35,7 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
