@@ -74,6 +74,32 @@ A standalone verification script exists at `scripts/verify-before-push.sh`. It r
 - **WIP branches** (`wip/*`) are automatically exempt — the script detects and skips them
 - **Why a script instead of a git hook?** Beads owns the `.git/hooks/pre-push` hook via bd-shim. Installing a separate pre-push hook would conflict. The script achieves the same goal without hook conflicts
 
+## Local Fleet — never run two of them (adj-z9dqs)
+
+launchd supervises the fleet: `com.adjutant.backend` (:4201) and
+`com.adjutant.frontend` (:4200). `./scripts/dev.sh` starts its OWN backend+Vite, so
+running it while the supervised fleet is up means two stacks fighting over two ports.
+
+That is not a tidy failure. On 2026-09-02 the duplicate Vite could not get 4200, fell
+back to **4201 — the backend's port** — and bound IPv6. `localhost` resolves `::1`
+first, so every MCP/REST client got Vite's index.html instead of the API:
+`ENDPOINT_NOT_FOUND` fleet-wide, 0 live agents. `127.0.0.1:4201/health` stayed green the
+whole time, which is why nothing looked down.
+
+Three guards, each closing a different half of that:
+
+- **`scripts/preflight-fleet.sh`** runs first in `dev.sh` and refuses to start when a
+  supervised job is running or either port already has a listener. It checks launchd
+  state AND listening sockets *across all address families* — an IPv6-only squatter is
+  invisible to a 127.0.0.1 probe. Override with `ADJUTANT_ALLOW_DUPLICATE_DEV=1`.
+- **`strictPort` in `frontend/vite.config.ts`** (server and preview) makes Vite die
+  rather than walk onto the neighbouring port. The launchd wrapper already passed
+  `--strictPort`; the config covers every *other* launch path (`npm run dev`, `dev:local`,
+  `dev.sh`, a bare `vite`) — which is where the incident came from.
+- **`scripts/supervisor/adjutant-server-heal.sh`** probes `localhost` (the name clients
+  actually resolve), not `127.0.0.1`, and asserts the backend's own `{"status":"ok"}`
+  body — a 200 from the wrong server now counts as down.
+
 ## Performance Budgets
 
 Frontend perf budgets live in `frontend/perf-budgets.md`. Run with `RUN_PERF=1 npm run test:perf` against a production preview build (`npm run build && npm run preview`). Do NOT measure perf against `npm run dev` — dev mode obscures regressions.

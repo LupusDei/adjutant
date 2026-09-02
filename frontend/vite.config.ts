@@ -49,6 +49,20 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: FRONTEND_PORT,
+    // Die instead of silently squatting another service's port (adj-z9dqs).
+    //
+    // Without this, Vite's default is to walk UP from 4200 when the port is
+    // taken — and 4201 is the BACKEND. On 2026-09-02 a second dev stack did
+    // exactly that, bound :4201 on IPv6, and every client that resolves
+    // `localhost` to ::1 got index.html where the API should have been. The
+    // whole fleet reported ENDPOINT_NOT_FOUND while 127.0.0.1:4201/health
+    // stayed green. A hard failure here is loud and harmless; the fallback is
+    // silent and fleet-wide.
+    //
+    // The launchd wrapper already passes --strictPort; setting it in the config
+    // covers EVERY launch path (npm run dev, dev:local, scripts/dev.sh, an
+    // agent's bare `vite`), which is where the incident came from.
+    strictPort: true,
     // Listen dual-stack so `localhost:4200` works in every browser (adj-e4rkt).
     //
     // Do NOT narrow this to one family. Safari does not fall back to 127.0.0.1
@@ -127,6 +141,11 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/ngrok-api/, ""),
       },
     },
+  },
+  // Same contract for `vite preview` (npm start / npm run start:frontend):
+  // never wander onto a neighbouring port (adj-z9dqs).
+  preview: {
+    strictPort: true,
   },
   test: {
     globals: true,

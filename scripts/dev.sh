@@ -23,6 +23,13 @@
 
 set -e
 
+# Refuse to start a SECOND fleet on top of the launchd-supervised one (adj-z9dqs).
+# Runs FIRST, before anything is installed, exported, or spawned — the failure
+# mode it prevents (a duplicate Vite falling back onto the backend's port and
+# shadowing it over IPv6) took the whole fleet down on 2026-09-02.
+# Override with ADJUTANT_ALLOW_DUPLICATE_DEV=1 if you know what you are doing.
+"$(dirname "$0")/preflight-fleet.sh"
+
 # Load environment variables from backend/.env if it exists
 if [ -f "backend/.env" ]; then
     export $(grep -v '^#' backend/.env | xargs)
