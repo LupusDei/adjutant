@@ -13,7 +13,7 @@
   padding: 6px 10px;
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   position: relative;
   border-radius: 2px;
 }

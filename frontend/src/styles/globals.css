@@ -249,7 +249,7 @@
   cursor: pointer;
   text-transform: var(--theme-text-transform, uppercase);
   letter-spacing: var(--theme-label-spacing, 0.1em);
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
   position: relative;
 }
 
@@ -284,7 +284,7 @@
   color: var(--pipboy-text);
   padding: 0.5rem;
   outline: none;
-  transition: all 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .pipboy-input:focus {
@@ -375,7 +375,7 @@
   border-width: 2px;
   border-color: var(--theme-accent);
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 [data-theme='friendly'] .pipboy-button:hover {
@@ -395,7 +395,7 @@
   border-radius: 10px;
   border: 2px solid var(--theme-border-color);
   background: #FFFFFF;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 [data-theme='friendly'] .pipboy-input:focus {
@@ -496,7 +496,7 @@
   border-radius: 6px;
   font-weight: 500;
   padding: 0.5rem 1.25rem;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 
 [data-theme='document'] .pipboy-button:focus-visible {
@@ -592,7 +592,7 @@
 a {
   color: var(--pipboy-green);
   text-decoration: none;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, text-shadow 0.15s ease;
 }
 
 a:hover {

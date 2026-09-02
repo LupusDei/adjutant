@@ -40,7 +40,7 @@
   font-family: inherit;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .voice-play-button:hover:not(:disabled),
@@ -253,7 +253,7 @@
   font-family: inherit;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
   position: relative;
 }
 
@@ -298,7 +298,7 @@
   color: var(--pipboy-green-dim, #00aa00);
   font-size: 0.75rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .voice-cancel-button:hover {
@@ -341,7 +341,7 @@
   font-family: inherit;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .master-mute-toggle:hover:not(:disabled) {
@@ -425,7 +425,7 @@
   font-size: 0.75rem;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .notification-toggle:hover:not(:disabled) {
@@ -637,7 +637,7 @@
   font-size: 0.8rem;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .voice-config-agent-btn:hover {
@@ -659,7 +659,7 @@
   font-family: inherit;
   font-size: 0.75rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .voice-config-delete-btn:hover {
@@ -697,7 +697,7 @@
   font-family: inherit;
   font-size: 0.75rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 
 .voice-config-add-btn:hover:not(:disabled) {
@@ -773,7 +773,7 @@
   font-size: 0.85rem;
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
   margin-top: 1rem;
 }
 
@@ -816,7 +816,7 @@
   font-family: inherit;
   font-size: 0.8rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .voice-preview-btn:hover:not(:disabled) {

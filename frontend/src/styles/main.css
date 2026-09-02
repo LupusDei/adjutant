@@ -131,7 +131,7 @@
     padding: 0.5rem 1rem;
     text-transform: var(--theme-text-transform, uppercase);
     letter-spacing: var(--theme-label-spacing, 0.05em);
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   }
 
   .pipboy-btn:hover {
@@ -366,7 +366,7 @@
     letter-spacing: var(--theme-letter-spacing, 0.15em);
     text-transform: var(--theme-text-transform, uppercase);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, text-shadow 0.2s ease;
     position: relative;
     overflow: hidden;
     display: flex;
@@ -442,7 +442,7 @@
     border-radius: 12px;
     border-width: 2px;
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     background: #FFFBF9;
     border-color: #D4CBEF;
   }
@@ -551,7 +551,7 @@
     letter-spacing: 0.01em;
     text-transform: none;
     padding: 0.625rem 1.75rem;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   }
 
   [data-theme='glass'] .nav-tab::before {

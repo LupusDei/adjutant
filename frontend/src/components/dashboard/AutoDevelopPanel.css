@@ -94,12 +94,17 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease,
+    transform 0.3s ease;
 }
 
+/* The active phase dot grows 12px -> 14px. Done with `transform: scale`, NOT
+   width/height: under the old `transition: all` those dimensions animated, which
+   is a layout animation (reflow every frame) and is forbidden by
+   .claude/rules/05-ui-theme.md. scale(14/12) is the same 14px result, composited
+   on the GPU, and keeps the growth animated instead of snapping. */
 .auto-develop-phase-dot.active .auto-develop-phase-indicator {
-  width: 14px;
-  height: 14px;
+  transform: scale(1.1667);
 }
 
 .auto-develop-phase-connector {

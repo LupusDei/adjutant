@@ -897,7 +897,7 @@
 /* Glass buttons: rounded with liquid feel */
 [data-theme='glass'] .crt-content button {
   border-radius: 10px !important;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
   font-weight: 600;
 }
 
