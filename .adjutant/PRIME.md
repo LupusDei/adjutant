@@ -320,7 +320,7 @@ Use the `bd` CLI for ALL bead/task operations. Do NOT use TaskCreate, TaskUpdate
 
 ```bash
 bd update <id> --assignee=<your-name> --status=in_progress   # Before starting work (ALWAYS include --assignee)
-bd close <id>                          # After completing work
+bd close <id>                          # After completing work — only if you are the assignee (see Ownership Guards)
 ```
 
 ### Bead Self-Assignment (MANDATORY)
@@ -338,6 +338,44 @@ bd update <id> --assignee=<your-agent-name> --status=in_progress
 - When a user tells you to work on a bead or epic via chat message, your FIRST action must be self-assignment — before planning, before reading code, before spawning teammates
 - Unassigned in-progress beads are a bug. Every `in_progress` bead must have an assignee.
 - The dashboard and other agents rely on assignee data for workload visibility. Without it, beads appear orphaned.
+
+### Bead Ownership Guards (MANDATORY — adj-128)
+
+**`bd` has no access control.** Any agent can overwrite, close, or reassign any bead, and nothing
+warns you. Real incidents: an agent destroyed adj-127 by running `bd create` with an ID that
+already existed, and the same agent closed adj-126 while it was assigned to someone else.
+These guards are the only protection. Run them every time.
+
+**1. Before `bd create --id=<X>`, confirm `<X>` does not exist:**
+
+```bash
+bd show <X>
+```
+
+- Create **only** if the output says `no issue found`. If the bead exists, do NOT create.
+  Pick the next free ID (run `bd show` on that one too), or `bd update` the existing bead if it is yours.
+- If `bd show` fails for any other reason (database locked, dolt error), stop and retry.
+  A failed lookup does not mean the ID is free.
+- Better: skip `--id` and use `bd create --parent=<parent-id> ...`. bd picks the ID, so
+  you cannot collide with an existing one.
+
+**2. Before `bd update` (title, description, status, priority, assignee) or `bd close`, check the assignee:**
+
+```bash
+bd show <id>          # read the Assignee: line
+```
+
+| Assignee is… | You may modify / close? |
+|---|---|
+| You | Yes |
+| Empty, and the bead is in your mission scope | Yes. Claim it first: `bd update <id> --assignee=<your-name> --status=in_progress` |
+| A Squad Member on **your** team (you are their Squad Leader) | Yes. Squad Leaders may assign, reassign, and close their own squad's beads |
+| Anyone else | **No.** Do not edit, close, or reassign it. `send_message` the assignee (or their Squad Leader) with what you found |
+
+- If you want a bead that belongs to someone else, ask for it. Never quietly take it over.
+- To leave a note on a bead you don't own, use `bd comment <id> "..."`. It only adds a comment
+  and changes nothing else.
+- The bead's `Owner:` field is the human git identity, not an agent. Only `Assignee:` counts here.
 
 **WARNING — MCP bead tools vs `bd` CLI:**
 - MCP bead tools (`create_bead`, `update_bead`, `close_bead`, `list_beads`, `show_bead`) always operate on the adjutant backend's database — they have NO project routing.
@@ -367,7 +405,7 @@ git add <files>
 git commit -m "task: <bead-id> <description>"
 git push -u origin <your-branch>
 
-# 5. Close the bead
+# 5. Close the bead (bd show <id> first — Assignee must be you; see Ownership Guards)
 bd close <id>
 ```
 

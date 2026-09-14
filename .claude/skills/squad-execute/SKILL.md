@@ -89,7 +89,7 @@ send_message({ to: "user", body: "Squad Execute: <epic-title>\n\nSquad compositi
 
 ### Step 4: Assign Beads Before Spawning
 
-For each agent, assign their beads BEFORE spawning them:
+For each agent, assign their beads BEFORE spawning them. First run `bd show <bead-id>` on each one. Assign only beads that are unassigned or already assigned to your own squad. Never take a bead that belongs to another agent (adj-128, see PRIME.md "Bead Ownership Guards"):
 
 ```bash
 bd update <bead-id> --assignee=engineer-1 --status=in_progress
@@ -140,6 +140,13 @@ After completing each task:
   7. set_status({ status: "done", task: "Completed <bead-id>: <what you finished>" })
 If push to main fails (race), pull --rebase and retry.
 If build/tests fail, fix them before closing the bead.
+
+Bead Ownership Guards (adj-128) — bd has no access control, so these checks are the only protection:
+  - Before `bd create --id=<X>`: run `bd show <X>`. Create only if it prints `no issue found`.
+    A duplicate --id silently OVERWRITES the existing bead. Better: `bd create --parent=<parent-id>` so bd picks the ID.
+  - Before `bd update` / `bd close`: run `bd show <id>`. Assignee must be you, or empty on a bead your
+    Squad Leader gave you (claim it first). If it belongs to anyone else, do not edit, close, or reassign it.
+    Report to your Squad Leader instead, or add a note with `bd comment <id> "..."`.
 Before shutting down:
   set_status({ status: "idle", task: "Finished work, shutting down" })
 
@@ -177,14 +184,15 @@ Your job:
 3. Run the full test suite and look for gaps
 4. Check edge cases the spec mentions but tests don't cover
 5. For each bug or gap found, create a bead:
-   bd create --id=<epic-id>.N.M.P --title="Bug: <description>" --type=bug --priority=<1-3>
-   bd dep add <parent-bead> <new-bug-id>
+   bd create --parent=<parent-bead> --title="Bug: <description>" --type=bug --priority=<1-3>
+   bd dep add <parent-bead> <new-id>
+   (If you must pass --id=<X>, run `bd show <X>` first and create only on `no issue found`. A duplicate --id overwrites the existing bead: adj-128.)
 6. Report findings via: send_message({ to: "user", body: "QA found: <summary>" })
 
 Spec location: <spec-path>
 Epic: <epic-id>
 
-<Include the Task Tracking and Question Routing blocks from Step 5>
+<Include the Task Tracking (with its Bead Ownership Guards) and Question Routing blocks from Step 5>
 ```
 
 ### Step 7: Spawn Optional Reviewers
@@ -204,11 +212,12 @@ Your job:
    - Does it follow the project's design system/theme?
    - Are accessibility requirements met?
 3. For each issue found, create a bead:
-   bd create --id=<epic-id>.N.M.P --title="UX: <description>" --type=task --priority=<1-3>
-   bd dep add <parent-bead> <new-task-id>
+   bd create --parent=<parent-bead> --title="UX: <description>" --type=task --priority=<1-3>
+   bd dep add <parent-bead> <new-id>
+   (If you must pass --id=<X>, run `bd show <X>` first and create only on `no issue found`. A duplicate --id overwrites the existing bead: adj-128.)
 4. Report via: send_message({ to: "user", body: "Product review: <summary>" })
 
-<Include the Task Tracking and Question Routing blocks from Step 5>
+<Include the Task Tracking (with its Bead Ownership Guards) and Question Routing blocks from Step 5>
 ```
 
 #### Code Reviewer
@@ -228,12 +237,13 @@ Your job:
    child beads under the epic for critical issues (as bugs) and warnings (as tasks).
 4. Review the skill output. For any findings that need additional context or
    nuance beyond what the automated review caught, create additional beads:
-   bd create --id=<epic-id>.N.M.P --title="Review: <description>" --type=task --priority=<2-3>
-   bd dep add <parent-bead> <new-task-id>
+   bd create --parent=<parent-bead> --title="Review: <description>" --type=task --priority=<2-3>
+   bd dep add <parent-bead> <new-id>
+   (If you must pass --id=<X>, run `bd show <X>` first and create only on `no issue found`. A duplicate --id overwrites the existing bead: adj-128.)
 5. Report via: send_message({ to: "user", body: "Code review: <summary>" })
 6. If engineers are still working, repeat steps 2-5 after each subsequent merge
 
-<Include the Task Tracking and Question Routing blocks from Step 5>
+<Include the Task Tracking (with its Bead Ownership Guards) and Question Routing blocks from Step 5>
 ```
 
 ### Step 8: Monitor and Report
@@ -247,7 +257,7 @@ While the squad works, the coordinator (you) must:
    report_progress({ task: "<epic-id>", percentage: N, description: "<status>" })
    ```
 3. **Unblock agents** — if an agent reports a blocker, investigate and help resolve it
-4. **Close sub-epics** — when all tasks under a sub-epic are closed, close the sub-epic:
+4. **Close sub-epics** — when all tasks under a sub-epic are closed, close the sub-epic. First run `bd show <sub-epic-id>` and make sure it is assigned to you or your squad:
    ```bash
    bd close <sub-epic-id>
    ```
@@ -270,7 +280,7 @@ When QA, Product, or Code Review agents create bug/task beads:
 
 When all engineer tasks are closed and reviewer findings are either fixed or documented:
 
-1. Close the root epic if all children are done:
+1. Close the root epic if all children are done. Run `bd show <epic-id>` first and make sure the assignee is you:
    ```bash
    bd close <epic-id> --reason="All phases complete"
    ```
@@ -291,6 +301,7 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
 - **ALWAYS use `isolation: "worktree"`** for every agent that edits files — no exceptions
 - **NEVER do implementation work as coordinator** — delegate everything
 - **Assign beads BEFORE spawning** — agents must know their work upfront
+- **Bead ownership guards (adj-128)** — `bd` has no access control. Run `bd show <X>` before every `bd create --id=<X>` (create only on `no issue found`), and before every `bd update`/`bd close` (the assignee must be you or your squad). Every spawn prompt carries the same rules in its Task Tracking block
 - **All communication via Adjutant MCP** — not stdout, not AskUserQuestion
 - **QA sentinel is mandatory** — never skip it, even for small epics
 - **Reviewers create their own beads** — they wire them under the epic hierarchy

@@ -109,10 +109,23 @@ announce({ type: "blocker", title: "Need help", body: "Can't access the API", be
 Use beads (\`bd\` CLI) for ALL task tracking. Do NOT use TaskCreate, TaskUpdate, or markdown files.
 
 \`\`\`bash
-bd update <id> --status=in_progress   # Before starting work
-bd close <id>                          # After completing work
+bd update <id> --assignee=<your-name> --status=in_progress   # Before starting work
+bd close <id>                          # After completing work — only if you are the assignee
 bd vc commit -m "session end"          # Before shutting down (if using Dolt backend)
 \`\`\`
+
+### Bead Ownership Guards (MANDATORY — adj-128)
+
+**\`bd\` has no access control.** Any agent can overwrite, close, or reassign any bead, and nothing warns you.
+
+1. **Before \`bd create --id=<X>\`**, run \`bd show <X>\`. Create **only** if it prints \`no issue found\`.
+   A duplicate \`--id\` silently OVERWRITES the existing bead. If \`bd show\` fails for another reason
+   (locked database, dolt error), stop and retry. A failed lookup does not mean the ID is free.
+   Better: \`bd create --parent=<parent-id> ...\` lets bd pick a free child ID.
+2. **Before \`bd update\` (title, description, status, assignee) or \`bd close\`**, run \`bd show <id>\` and read
+   the \`Assignee:\` line. Go ahead only if it is you, it is empty and the bead is in your scope (claim it
+   first), or you are the Squad Leader of the assignee. Otherwise do not edit, close, or reassign it.
+   \`send_message\` the assignee instead, or add a note with \`bd comment <id> "..."\`.
 
 ## Available MCP Tools
 

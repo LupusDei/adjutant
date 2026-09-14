@@ -61,6 +61,21 @@ set_status({ status: "done", task: "Completed <bead-id>: <what>" })
 
 **Do NOT merge to main.** Worktree agents cannot `git checkout main`. Push your branch — the squad leader merges from the main repo.
 
+## 🛡️ Bead Ownership Guards (adj-128)
+`bd` has no access control. Any agent can overwrite or close any bead, and nothing warns you.
+An agent once destroyed an existing bead with `bd create --id=<existing-id>`, and closed a bead
+that belonged to someone else. These checks are the only protection:
+
+1. **Before `bd create --id=<X>`**, run `bd show <X>`. Create only if it prints `no issue found`.
+   If the bead exists, pick another ID and check that one too. If `bd show` fails for another
+   reason (locked database, dolt error), stop and retry. Better: skip `--id` and use
+   `bd create --parent=<parent-id> ...` so bd picks the ID.
+2. **Before `bd update` or `bd close`**, run `bd show <id>` and read `Assignee:`. Go ahead only if
+   it is **you**, or it is empty and the bead is one your Squad Leader gave you (claim it first
+   with `bd update <id> --assignee=<your-name> --status=in_progress`).
+   If it belongs to anyone else, do not edit, close, or reassign it. Report to your Squad Leader
+   instead. To add a note without changing anything, use `bd comment <id> "..."`.
+
 ## 🛑 NEVER create or switch branches (adj-laz97)
 You are **already on your own branch** — the worktree put you on it (`git branch --show-current` shows it). You do NOT need a feature branch.
 

@@ -34,7 +34,25 @@ bd list --status=all | grep "bd-" | head -20
 # Look for highest bd-xxx root ID, use next number
 ```
 
+Then run `bd show` on the ID you picked (see Collision Guard below). `head -20` can miss existing IDs, so it does not prove the ID is free.
+
 ## Creating Beads
+
+### Collision Guard (MANDATORY — adj-128)
+
+`bd create --id=<X>` does **not** fail when `<X>` already exists. It silently **overwrites** that
+bead: its title, type, and description are replaced, and its children now hang off the wrong
+bead. That is how adj-127 was destroyed. Before every `--id` create:
+
+```bash
+bd show bd-012        # must print: no issue found — anything else means STOP
+```
+
+- If the bead exists, pick a different ID and check that one too.
+- If `bd show` fails for another reason (locked database, dolt error), retry. Never treat a
+  failed lookup as "ID is free".
+- For sub-epics and tasks, `bd create --parent=bd-012 ...` lets bd pick the next free child ID,
+  so it cannot collide.
 
 ### Root Epic
 ```bash

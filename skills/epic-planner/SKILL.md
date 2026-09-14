@@ -79,10 +79,11 @@ bd-xxx           (root epic, type=epic)
 
 Steps:
 1. Find next available root ID: `bd list --status=all` and pick next sequential root
-2. Create root epic: `bd create --id=bd-xxx --title="..." --description="..." --type=epic --priority=N`
-3. Create sub-epics for each phase (Setup, Foundational, US1, US2..., Polish)
-4. Create tasks under each sub-epic
-5. **Wire dependencies immediately** (MANDATORY — see beads-workflow.md)
+2. **Collision guard (MANDATORY, adj-128):** run `bd show bd-xxx` and continue only if it prints `no issue found`. `bd create --id` with an existing ID silently overwrites that bead: its title, type, and description are replaced and nothing warns you. Do the same `bd show` check before every `--id` you create below. Sub-epics and tasks can use `--parent=<parent-id>` instead, which lets bd pick a free child ID.
+3. Create root epic: `bd create --id=bd-xxx --title="..." --description="..." --type=epic --priority=N`
+4. Create sub-epics for each phase (Setup, Foundational, US1, US2..., Polish)
+5. Create tasks under each sub-epic
+6. **Wire dependencies immediately** (MANDATORY — see beads-workflow.md)
 
 ### Phase 4: Update Artifacts with Bead IDs
 

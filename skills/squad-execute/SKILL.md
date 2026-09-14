@@ -89,7 +89,7 @@ send_message({ to: "user", body: "Squad Execute: <epic-title>\n\nSquad compositi
 
 ### Step 4: Assign Beads Before Spawning
 
-For each agent, assign their beads BEFORE spawning them:
+For each agent, assign their beads BEFORE spawning them. First run `bd show <bead-id>` on each one. Assign only beads that are unassigned or already assigned to your own squad. Never take a bead that belongs to another agent (adj-128, see PRIME.md "Bead Ownership Guards"):
 
 ```bash
 bd update <bead-id> --assignee=engineer-1 --status=in_progress
@@ -177,14 +177,15 @@ Your job:
 5. Check test quality: tests must verify behavior, not implementation. No brittle mocks. Mock data must use real CLI output shapes (see 03-testing.md adj-067 lesson).
 6. Check edge cases the spec mentions but tests don't cover
 7. For each bug or gap found, create a bead:
-   bd create --id=<epic-id>.N.M.P --title="Bug: <description>" --type=bug --priority=<1-3>
-   bd dep add <parent-bead> <new-bug-id>
+   bd create --parent=<parent-bead> --title="Bug: <description>" --type=bug --priority=<1-3>
+   bd dep add <parent-bead> <new-id>
+   (If you must pass --id=<X>, run `bd show <X>` first and create only on `no issue found`. A duplicate --id overwrites the existing bead: adj-128.)
 6. Report findings via: send_message({ to: "user", body: "QA found: <summary>" })
 
 Spec location: <spec-path>
 Epic: <epic-id>
 
-<Include the Task Tracking and Question Routing blocks from Step 5>
+<Include the contents of skills/squad-execute/squad-member-context.md verbatim (task tracking, bead ownership guards, question routing)>
 ```
 
 ### Step 7: Spawn Optional Reviewers
@@ -211,11 +212,12 @@ Your job:
    - Does it follow the project's design system/theme?
    - Are accessibility requirements met?
 3. For each issue found, create a bead:
-   bd create --id=<epic-id>.N.M.P --title="UX: <description>" --type=task --priority=<1-3>
-   bd dep add <parent-bead> <new-task-id>
+   bd create --parent=<parent-bead> --title="UX: <description>" --type=task --priority=<1-3>
+   bd dep add <parent-bead> <new-id>
+   (If you must pass --id=<X>, run `bd show <X>` first and create only on `no issue found`. A duplicate --id overwrites the existing bead: adj-128.)
 4. Report via: send_message({ to: "user", body: "Product review: <summary>" })
 
-<Include the Task Tracking and Question Routing blocks from Step 5>
+<Include the contents of skills/squad-execute/squad-member-context.md verbatim (task tracking, bead ownership guards, question routing)>
 ```
 
 #### Code Reviewer
@@ -240,11 +242,12 @@ Your job:
    - Error handling: are failure modes handled gracefully?
    - Security: any injection risks, data leaks, or auth bypasses?
 3. For each improvement needed, create a bead:
-   bd create --id=<epic-id>.N.M.P --title="Review: <description>" --type=task --priority=<2-3>
-   bd dep add <parent-bead> <new-task-id>
+   bd create --parent=<parent-bead> --title="Review: <description>" --type=task --priority=<2-3>
+   bd dep add <parent-bead> <new-id>
+   (If you must pass --id=<X>, run `bd show <X>` first and create only on `no issue found`. A duplicate --id overwrites the existing bead: adj-128.)
 4. Report via: send_message({ to: "user", body: "Code review: <summary>" })
 
-<Include the Task Tracking and Question Routing blocks from Step 5>
+<Include the contents of skills/squad-execute/squad-member-context.md verbatim (task tracking, bead ownership guards, question routing)>
 ```
 
 ### Step 8: Monitor and Report
@@ -258,7 +261,7 @@ While the squad works, the coordinator (you) must:
    report_progress({ task: "<epic-id>", percentage: N, description: "<status>" })
    ```
 3. **Unblock agents** — if an agent reports a blocker, investigate and help resolve it
-4. **Close sub-epics** — when all tasks under a sub-epic are closed, close the sub-epic:
+4. **Close sub-epics** — when all tasks under a sub-epic are closed, close the sub-epic. First run `bd show <sub-epic-id>` and make sure it is assigned to you or your squad:
    ```bash
    bd close <sub-epic-id>
    ```
@@ -307,7 +310,7 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
 
    **Why the `--show-current` guards (adj-laz97):** a worktree agent whose cwd leaked to the main repo can run `git checkout -b` and silently move main's HEAD onto a stray branch. Then your `git merge` lands on the stray branch and `git push origin main` reports "up-to-date" while main is wrong. The guards catch it before the merge/push.
 
-2. Close the root epic if all children are done:
+2. Close the root epic if all children are done. Run `bd show <epic-id>` first and make sure the assignee is you:
    ```bash
    bd close <epic-id> --reason="All phases complete"
    ```
@@ -331,6 +334,7 @@ When all engineer tasks are closed and reviewer findings are either fixed or doc
 - **Coordinator: verify you are on main BEFORE every merge and push (adj-laz97)** — run `git branch --show-current` (must print `main`) and confirm `git rev-parse HEAD` is the commit you expect. This catches a silent HEAD move before it corrupts the merge target. (This is how the adj-laz97 incident was caught and recovered with zero loss.)
 - **NEVER do implementation work as coordinator** — delegate everything
 - **Assign beads BEFORE spawning** — agents must know their work upfront
+- **Bead ownership guards (adj-128)** — `bd` has no access control. Run `bd show <X>` before every `bd create --id=<X>` (create only on `no issue found`), and before every `bd update`/`bd close` (the assignee must be you or your squad). Every squad member gets the same rules through `squad-member-context.md`
 - **All communication via Adjutant MCP** — not stdout, not AskUserQuestion
 - **QA sentinel is mandatory** — never skip it, even for small epics
 - **Reviewers create their own beads** — they wire them under the epic hierarchy

@@ -129,3 +129,30 @@ describe.each(primeVariants)("Prime protocol mandate — %s", (_label, content) 
     });
   });
 });
+
+/**
+ * adj-128: bd has no access control. The ONLY protection against an agent
+ * overwriting a bead via a duplicate `bd create --id` (the adj-127 incident) or
+ * closing someone else's bead (the adj-126 incident) is these protocol guards.
+ * Whichever PRIME variant an agent loads, the guards must be present.
+ */
+describe.each(primeVariants)("%s — bead ownership guards (adj-128)", (_label, content) => {
+  it("should require bd show before bd create --id and only create on 'no issue found'", () => {
+    expect(content).toContain("bd create --id");
+    expect(content).toContain("bd show <X>");
+    expect(content).toContain("no issue found");
+  });
+
+  it("should warn that a failed lookup is not proof the ID is free", () => {
+    expect(content.toLowerCase()).toContain("failed lookup");
+  });
+
+  it("should require verifying the Assignee before bd update or bd close", () => {
+    expect(content).toMatch(/before `bd update`[^\n]*`bd close`/i);
+    expect(content).toContain("Assignee");
+  });
+
+  it("should name --parent as the collision-free alternative to --id", () => {
+    expect(content).toContain("--parent=");
+  });
+});
