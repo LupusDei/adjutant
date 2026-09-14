@@ -214,3 +214,35 @@ describe.each(primeVariants)("%s — scoped message reads (adj-111.1)", (_label,
     expect(content).toContain('recipient === "<your-name>"');
   });
 });
+
+/**
+ * adj-111.3: the Layer Identity Preambles are what spawn points inject verbatim,
+ * so the scoped-read rule has to be inside each preamble block, not only elsewhere
+ * in PRIME.md. Only the canonical file carries the preambles.
+ */
+describe(".adjutant/PRIME.md — Layer 3/4 preambles carry scoped reads (adj-111.3)", () => {
+  /** Returns the fenced block that directly follows a "#### <heading>" line. */
+  function preambleBlock(heading: string): string {
+    const start = canonicalPrimeContent.indexOf(`#### ${heading}`);
+    expect(start).toBeGreaterThan(-1);
+    const open = canonicalPrimeContent.indexOf("```", start);
+    const close = canonicalPrimeContent.indexOf("```", open + 3);
+    return canonicalPrimeContent.slice(open, close);
+  }
+
+  it.each([
+    "Coordinator → Squad Leader (via spawn_worker)",
+    "Squad Leader → Squad Member (via Agent tool)",
+  ])("should include the self-scoped read in the %s preamble", (heading) => {
+    const block = preambleBlock(heading);
+    // Preambles are spawner-filled templates, so the placeholder is <name> (same as "You are <name>").
+    expect(block).toContain('read_messages({ agentId: "<name>"');
+    expect(block).toContain("Do NOT use unscoped reads");
+  });
+
+  it("should tell Squad Leaders to also read the coordinator's messages to them", () => {
+    const block = preambleBlock("Coordinator → Squad Leader (via spawn_worker)");
+    expect(block).toContain('read_messages({ agentId: "adjutant-coordinator"');
+    expect(block).toContain('recipient === "<name>"');
+  });
+});

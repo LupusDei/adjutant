@@ -36,6 +36,14 @@ set_status({ status: "done", task: "Completed <id>: <what>" })
 send_message({ to: "user", body: "..." })   // General comms only — use file_question for questions
 ```
 
+Check messages with **scoped reads only** (adj-111.3). Never call `read_messages` without `agentId`:
+```
+read_messages({ agentId: "<your-name>", limit: 10 })
+read_messages({ agentId: "<squad-leader>", limit: 20 })   // keep entries where recipient === "<your-name>"
+```
+The first read does NOT include messages from other agents. Your Squad Leader's `send_message` to you
+only shows up in the second read.
+
 ## Task Tracking
 Use `bd` CLI for ALL task tracking. Do NOT use TaskCreate or TaskUpdate.
 

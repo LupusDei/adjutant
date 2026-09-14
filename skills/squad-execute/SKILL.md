@@ -140,6 +140,8 @@ You are <name>, a Squad Member on <squad-leader>'s team.
 - Your name (for --assignee): <agent-name>
 - Your assigned beads: <list their bead IDs>
 - Parent epic: <epic-id>
+- Read messages scoped to your own ID: read_messages({ agentId: "<agent-name>", limit: 10 }). Do NOT use unscoped reads. In a busy system you will miss direct instructions
+- That read does NOT include messages from other agents. To get your Squad Leader's instructions, also run read_messages({ agentId: "<squad-leader>", limit: 20 }) and keep entries where recipient === "<agent-name>"
 ```
 
 3. Read the squad member protocol file into the spawn prompt:

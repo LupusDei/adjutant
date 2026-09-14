@@ -127,6 +127,10 @@ Your name (for --assignee): <agent-name>
 Your assigned beads: <list their bead IDs>
 Parent epic: <epic-id>
 
+Checking messages (scoped reads only, adj-111.3). Never call read_messages without agentId:
+  read_messages({ agentId: "<your-name>", limit: 10 })
+  read_messages({ agentId: "<squad-leader>", limit: 20 })   // keep entries where recipient === "<your-name>"
+  (The first read does NOT include messages from other agents. Your Squad Leader's send_message to you only shows up in the second.)
 Before starting each task:
   bd update <id> --assignee=<your-name> --status=in_progress
   set_status({ status: "working", task: "<concise description>" })
