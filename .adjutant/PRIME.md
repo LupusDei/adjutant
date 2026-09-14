@@ -399,13 +399,13 @@ bd show <X>
 **2. Before `bd update` (title, description, status, priority, assignee) or `bd close`, check the assignee:**
 
 ```bash
-bd show <id>          # read the Assignee: line
+bd show <id>          # read the "Assignee:" field (header, next to Owner:)
 ```
 
 | Assignee is… | You may modify / close? |
 |---|---|
 | You | Yes |
-| Empty, and the bead is in your mission scope | Yes. Claim it first: `bd update <id> --assignee=<your-name> --status=in_progress` |
+| Missing (no `Assignee:` shown), and the bead is in your mission scope | Yes. Claim it first: `bd update <id> --assignee=<your-name> --status=in_progress` |
 | A Squad Member on **your** team (you are their Squad Leader) | Yes. Squad Leaders may assign, reassign, and close their own squad's beads |
 | Anyone else | **No.** Do not edit, close, or reassign it. `send_message` the assignee (or their Squad Leader) with what you found |
 

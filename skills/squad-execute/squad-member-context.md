@@ -81,7 +81,7 @@ that belonged to someone else. These checks are the only protection:
    reason (locked database, dolt error), stop and retry. Better: skip `--id` and use
    `bd create --parent=<parent-id> ...` so bd picks the ID.
 2. **Before `bd update` or `bd close`**, run `bd show <id>` and read `Assignee:`. Go ahead only if
-   it is **you**, or it is empty and the bead is one your Squad Leader gave you (claim it first
+   it is **you**, or it is missing (unassigned beads show no `Assignee:` at all) and the bead is one your Squad Leader gave you (claim it first
    with `bd update <id> --assignee=<your-name> --status=in_progress`).
    If it belongs to anyone else, do not edit, close, or reassign it. Report to your Squad Leader
    instead. To add a note without changing anything, use `bd comment <id> "..."`.

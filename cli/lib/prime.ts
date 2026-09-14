@@ -141,7 +141,7 @@ bd vc commit -m "session end"          # Before shutting down (if using Dolt bac
    (locked database, dolt error), stop and retry. A failed lookup does not mean the ID is free.
    Better: \`bd create --parent=<parent-id> ...\` lets bd pick a free child ID.
 2. **Before \`bd update\` (title, description, status, assignee) or \`bd close\`**, run \`bd show <id>\` and read
-   the \`Assignee:\` line. Go ahead only if it is you, it is empty and the bead is in your scope (claim it
+   the \`Assignee:\` field. Go ahead only if it is you, it is missing (unassigned) and the bead is in your scope (claim it
    first), or you are the Squad Leader of the assignee. Otherwise do not edit, close, or reassign it.
    \`send_message\` the assignee instead, or add a note with \`bd comment <id> "..."\`.
 
