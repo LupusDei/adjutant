@@ -17,6 +17,12 @@ export const PRIME_MD_CONTENT = `# Adjutant Agent Protocol
 
 ## MCP Communication (MANDATORY)
 
+> **🛑 RULE: NEVER respond to user questions via stdout/text output.**
+> ALL responses MUST go through \`send_message\` MCP tool. The dashboard and iOS app ONLY see
+> MCP messages — stdout is invisible to the user. A reply you print is a reply the General
+> never gets. That includes answers, acknowledgements, "done" reports, and "I'm stuck".
+> If your MCP tools are not loaded yet, load them first (Boot Sequence step 1). Do not fall back to text.
+
 You have MCP tools for communicating with the Adjutant dashboard and other agents.
 These tools are connected via \`.mcp.json\` at the project root. **Always use MCP tools
 for communication — never rely on stdout or text output alone.**

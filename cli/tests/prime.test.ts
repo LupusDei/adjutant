@@ -156,3 +156,31 @@ describe.each(primeVariants)("%s — bead ownership guards (adj-128)", (_label, 
     expect(content).toContain("--parent=");
   });
 });
+
+/**
+ * adj-111.2: agents kept answering via stdout, which the dashboard and iOS app
+ * never see. The rule must be a bold top-level rule in MCP Communication,
+ * not just an implication of "use send_message".
+ */
+describe.each(primeVariants)("%s — MCP-only responses (adj-111.2)", (_label, content) => {
+  const mcpSection = content.slice(content.indexOf("## MCP Communication"));
+
+  it("should state as a bold rule that responses never go to stdout", () => {
+    expect(mcpSection).toMatch(/\*\*[^*\n]*NEVER respond to user questions via stdout\/text output\.?\*\*/);
+  });
+
+  it("should require ALL responses to go through send_message", () => {
+    expect(mcpSection).toContain("ALL responses MUST go through `send_message`");
+  });
+
+  it("should explain that stdout is invisible to the user", () => {
+    expect(mcpSection).toContain("stdout is invisible to the user");
+  });
+
+  it("should place the rule before the first MCP subsection", () => {
+    const rule = mcpSection.indexOf("NEVER respond to user questions via stdout");
+    const firstSubsection = mcpSection.indexOf("\n### ");
+    expect(rule).toBeGreaterThan(-1);
+    expect(rule).toBeLessThan(firstSubsection);
+  });
+});

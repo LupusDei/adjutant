@@ -27,6 +27,8 @@ So on EVERY resumed turn, before touching any file:
 3. After working on a resumed turn, verify the shared tree is clean: from the main repo, `git status` must NOT show your edits as untracked/modified there.
 
 ## MCP Communication
+**NEVER report via stdout/text output. Nobody sees it** (adj-111.2). The dashboard and your Squad Leader only see MCP messages. Every report, answer, and blocker goes through `send_message` / `set_status`.
+
 Report status via MCP tools connected through `.mcp.json`:
 ```
 set_status({ status: "working", task: "<what you're doing>", beadId: "<id>" })
