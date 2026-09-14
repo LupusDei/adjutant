@@ -191,8 +191,11 @@ bootstrapping, your output goes to stdout only — **invisible on the dashboard 
 1. ToolSearch("select:mcp__adjutant__read_messages,mcp__adjutant__set_status,mcp__adjutant__send_message")
    → Loads MCP tool schemas so you can call them
 
-2. read_messages({ agentId: "<your-name>", limit: 5 })
-   → Check for pending instructions from user or other agents
+2. read_messages({ agentId: "<your-name>", limit: 10 })
+   → Messages the General sent you (the results also include your own sent messages; skip those)
+   read_messages({ agentId: "<who-spawned-you>", limit: 20 })   // e.g. "adjutant-coordinator", or your Squad Leader
+   → Keep only entries where recipient === "<your-name>". Those are that agent's instructions to you
+   (See "Reading Your Messages" below. A self-scoped read does NOT show messages other agents sent you.)
 
 3. set_status({ status: "working", task: "Boot complete — reading instructions" })
    → Dashboard now shows you as online
@@ -235,8 +238,32 @@ using `send_message`, NOT by printing to stdout. The dashboard and iOS app only 
 MCP messages.
 
 - **On startup**: Complete the Boot Sequence above (includes `read_messages` in step 2)
-- **During work**: Periodically check for new messages via `read_messages({ agentId: "<your-name>", limit: 5 })`
+- **During work**: Periodically re-run the two scoped reads below
 - **For general replies**: Use `send_message({ to: "user", body: "..." })`
+
+### Reading Your Messages (scoped reads — adj-111.1)
+
+**Never call `read_messages` without `agentId`.** In a busy fleet, an unscoped read (no `agentId`)
+can come back full of other agents' messages, and you miss orders sent to you.
+
+Know what the filter actually returns. `read_messages({ agentId: "X" })` returns:
+- messages **X sent** (to anyone), plus
+- messages **the General sent to X**.
+
+It **does NOT return messages other agents sent you.** When the coordinator or another agent calls
+`send_message({ to: "<your-name>" })`, that message is stored under the *sender's* ID. On live data,
+an agent's self-scoped read returned 0 of the 4 messages the coordinator had sent it. So always do both reads:
+
+```
+// 1. From the General (skip entries you sent yourself)
+read_messages({ agentId: "<your-name>", limit: 10 })
+
+// 2. From the agent that directs you: the coordinator, or your Squad Leader
+read_messages({ agentId: "<sender-name>", limit: 20 })
+// → keep only entries where recipient === "<your-name>"
+```
+
+If you're expecting a message from some other agent, repeat read 2 with that agent's name.
 
 ### Filing Questions and Blocking Actions (MANDATORY)
 

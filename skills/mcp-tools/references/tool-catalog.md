@@ -50,7 +50,7 @@ Read messages with optional filtering and cursor-based pagination.
 | Field    | Type   | Required | Description                                       |
 |----------|--------|----------|---------------------------------------------------|
 | threadId | string | no       | Filter by thread ID                               |
-| agentId  | string | no       | Filter by agent ID                                |
+| agentId  | string | no       | Messages this agent SENT, plus messages the General (`role: user`) sent to it. Does NOT include DMs other agents sent to it (adj-111.1) |
 | limit    | number | no       | Max messages to return (default: 50)              |
 | before   | string | no       | Cursor: return messages before this ISO timestamp |
 | beforeId | string | no       | Cursor: disambiguate same-second messages         |

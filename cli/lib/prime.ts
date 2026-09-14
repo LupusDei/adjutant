@@ -33,8 +33,20 @@ When you receive a message (from the user or another agent), you **MUST** respon
 using \`send_message\`, NOT by printing to stdout. The dashboard and iOS app only see
 MCP messages.
 
-- **On startup**: Call \`read_messages({ limit: 5 })\` to check for pending messages
-- **During work**: Periodically check for new messages
+- **On startup and periodically during work**: run the two scoped reads below
+
+### Reading Your Messages (scoped reads — adj-111.1)
+
+**Never call \`read_messages\` without \`agentId\`.** Unscoped reads return other agents' chatter, and you miss orders sent to you.
+
+\`read_messages({ agentId: "X" })\` returns messages X sent plus messages the General sent to X.
+It **does NOT return messages other agents sent you**: those are stored under the sender's ID. So do both:
+
+\`\`\`
+read_messages({ agentId: "<your-name>", limit: 10 })     // from the General (skip your own sent messages)
+read_messages({ agentId: "<sender-name>", limit: 20 })   // from the coordinator / your Squad Leader
+// → keep only entries where recipient === "<your-name>"
+\`\`\`
 - **For general replies**: Use \`send_message({ to: "user", body: "..." })\`
 
 ### Filing Questions and Blocking Actions (MANDATORY)

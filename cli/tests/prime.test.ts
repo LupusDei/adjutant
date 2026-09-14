@@ -184,3 +184,33 @@ describe.each(primeVariants)("%s — MCP-only responses (adj-111.2)", (_label, c
     expect(rule).toBeLessThan(firstSubsection);
   });
 });
+
+/**
+ * adj-111.1: unscoped `read_messages({ limit: 5 })` in a busy fleet returns other
+ * agents' chatter, and the agent misses direct instructions.
+ *
+ * Verified against the store (message-store.ts getMessages): `agentId: X` matches
+ * `agent_id = X OR (role = 'user' AND recipient = X)`. That is what X SENT plus
+ * what the General sent to X. It does NOT include agent->agent DMs addressed to X.
+ * On live data, raynor's self-scoped read returned 0 of 4 coordinator->raynor
+ * messages. The guidance must say so, or agents will think the scoped read is a
+ * full inbox.
+ */
+describe.each(primeVariants)("%s — scoped message reads (adj-111.1)", (_label, content) => {
+  it("should not instruct an unscoped read_messages call", () => {
+    expect(content).not.toMatch(/read_messages\(\{\s*limit:\s*\d+\s*\}\)/);
+  });
+
+  it("should instruct a read scoped to the agent's own ID", () => {
+    expect(content).toContain('read_messages({ agentId: "<your-name>"');
+  });
+
+  it("should warn that a self-scoped read does not include DMs from other agents", () => {
+    expect(content).toContain("does NOT return messages other agents sent you");
+  });
+
+  it("should show how to read another agent's instructions to you (sender-scoped + recipient filter)", () => {
+    expect(content).toMatch(/read_messages\(\{ agentId: "<[a-z-]*(sender|spawned|leader)[a-z-]*>"/i);
+    expect(content).toContain('recipient === "<your-name>"');
+  });
+});

@@ -173,8 +173,15 @@ When you receive a message via MCP (visible through `read_messages`), you **MUST
 using `send_message`. Never respond via stdout or text output alone -- the user and other
 agents can only see messages sent through the MCP tools.
 
-**On startup**: Call `read_messages({ limit: 5 })` to check for any pending messages.
-If there are unread messages addressed to you, respond to them via `send_message`.
+**On startup**, run two scoped reads (adj-111.1). Never read without `agentId`:
+```
+read_messages({ agentId: "<your-name>", limit: 10 })     // from the General (skip your own sent messages)
+read_messages({ agentId: "<sender-name>", limit: 20 })   // from the coordinator or your Squad Leader
+// → keep only entries where recipient === "<your-name>"
+```
+`agentId: X` returns what X sent plus what the General sent to X. It does NOT return messages
+other agents sent you; those are stored under the sender's ID. That's why the second read is needed.
+Respond to anything addressed to you via `send_message`.
 
 **During work**: Periodically check for new messages, especially if you're working on
 a long task. The user may send follow-up questions or priority changes.
