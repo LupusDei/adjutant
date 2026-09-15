@@ -47,6 +47,16 @@ send_message({
 })
 ```
 
+**`direct_message`** -- Reach another agent: stores the message AND injects it into the recipient's live session.
+```
+direct_message({ to: "raynor", body: "adj-042.3 merged — rebase before you push." })
+// → { messageId, deliveredToSessions, sessionsFound }
+```
+- `send_message` to an agent only **stores** the message; the recipient has to pull it. Use `direct_message` for agents.
+- `deliveredToSessions: 0` means nobody received it. Never report that as delivered.
+- If the recipient has no live session (an MCP-only agent), it is rejected. Use `send_message` instead.
+- Not for `user` / `mayor/`. The General is always reached with `send_message`.
+
 **`read_messages`** -- Read messages with optional filters (by agent, thread).
 ```
 read_messages({ limit: 10, threadId: "build-status" })
@@ -163,6 +173,7 @@ Messages flow through this pipeline:
 2. Message is persisted to SQLite (survives restarts)
 3. WebSocket event broadcasts to connected dashboard clients
 4. If recipient is `"user"` or `"mayor/"`, APNS push notification is sent to iOS
+5. If the recipient is an agent, **nothing is injected**; the agent has to pull it. `direct_message` does steps 2-3 AND injects into the agent's live session
 
 Messages are durable -- they persist even if the dashboard is not connected.
 Use `read_messages` to catch up on messages sent while you were offline.
@@ -181,7 +192,7 @@ read_messages({ agentId: "<sender-name>", limit: 20 })   // from the coordinator
 ```
 `agentId: X` returns what X sent plus what the General sent to X. It does NOT return messages
 other agents sent you; those are stored under the sender's ID. That's why the second read is needed.
-Respond to anything addressed to you via `send_message`.
+Reply to the General with `send_message`, and to another agent with `direct_message`.
 
 **During work**: Periodically check for new messages, especially if you're working on
 a long task. The user may send follow-up questions or priority changes.

@@ -192,7 +192,7 @@ bootstrapping, your output goes to stdout only — **invisible on the dashboard 
 ### Boot Steps (execute in order)
 
 ```
-1. ToolSearch("select:mcp__adjutant__read_messages,mcp__adjutant__set_status,mcp__adjutant__send_message")
+1. ToolSearch("select:mcp__adjutant__read_messages,mcp__adjutant__set_status,mcp__adjutant__send_message,mcp__adjutant__direct_message")
    → Loads MCP tool schemas so you can call them
 
 2. read_messages({ agentId: "<your-name>", limit: 10 })
@@ -254,8 +254,9 @@ Know what the filter actually returns. `read_messages({ agentId: "X" })` returns
 - messages **X sent** (to anyone), plus
 - messages **the General sent to X**.
 
-It **does NOT return messages other agents sent you.** When the coordinator or another agent calls
-`send_message({ to: "<your-name>" })`, that message is stored under the *sender's* ID. On live data,
+It **does NOT return messages other agents sent you.** When another agent messages you (`send_message` or
+`direct_message`), the message is stored under the *sender's* ID. A `direct_message` also shows up live
+in your session. A `send_message` from an agent does not; the second read below is the only place you'll find it. On live data,
 an agent's self-scoped read returned 0 of the 4 messages the coordinator had sent it. So always do both reads:
 
 ```
@@ -312,10 +313,30 @@ state your assumption, and continue on unblocked work.
 
 ### Sending Messages
 
+**To the General:** `send_message`. This path carries the phone push.
+
 ```
 send_message({ to: "user", body: "Build complete. All tests pass." })
 send_message({ to: "user", body: "Finished adj-013.2, moving to adj-013.3" })
 ```
+
+**To reach another agent, use `direct_message`** (coordinator, Squad Leader, squad member, peer):
+
+```
+direct_message({ to: "raynor", body: "adj-042.3 is merged — rebase before you push." })
+// → { messageId, deliveredToSessions, sessionsFound }
+```
+
+- `send_message` to an agent **only stores** the message. Nothing reaches the recipient until they
+  pull it with `read_messages`, and their self-scoped read won't show it (see "Reading Your Messages").
+  `direct_message` stores it **and** injects it into the recipient's live session.
+- **Check `deliveredToSessions`.** If it is 0, nobody received it. Do not report it as sent or
+  acknowledged; say it could not be delivered, and retry later or escalate.
+- If `direct_message` rejects the recipient because it has no live session, fall back to `send_message({ to: "<agent>" })`.
+  That happens with MCP-only agents, and they have to pull the message.
+- `direct_message` never goes to `user` / `mayor/`. The General is always reached with `send_message`.
+- Don't see `direct_message` in your tools? Your session connected before the server gained it.
+  Use the `direct-message` skill for now, which injects via tmux and stores an MCP copy.
 
 ### Status Reporting (MANDATORY)
 
@@ -407,7 +428,7 @@ bd show <id>          # read the "Assignee:" field (header, next to Owner:)
 | You | Yes |
 | Missing (no `Assignee:` shown), and the bead is in your mission scope | Yes. Claim it first: `bd update <id> --assignee=<your-name> --status=in_progress` |
 | A Squad Member on **your** team (you are their Squad Leader) | Yes. Squad Leaders may assign, reassign, and close their own squad's beads |
-| Anyone else | **No.** Do not edit, close, or reassign it. `send_message` the assignee (or their Squad Leader) with what you found |
+| Anyone else | **No.** Do not edit, close, or reassign it. `direct_message` the assignee (or their Squad Leader) with what you found |
 
 - If you want a bead that belongs to someone else, ask for it. Never quietly take it over.
 - To leave a note on a bead you don't own, use `bd comment <id> "..."`. It only adds a comment
@@ -418,7 +439,7 @@ bd show <id>          # read the "Assignee:" field (header, next to Owner:)
 - MCP bead tools (`create_bead`, `update_bead`, `close_bead`, `list_beads`, `show_bead`) always operate on the adjutant backend's database — they have NO project routing.
 - If you are working in a different project/repo that has its own `.beads/` database, MCP bead tools will hit the WRONG database.
 - **Always use `bd` CLI** for bead operations. It runs in your working directory and finds the correct `.beads/` automatically.
-- Use MCP tools ONLY for communication: `send_message`, `read_messages`, `set_status`, `report_progress`, `announce`.
+- Use MCP tools ONLY for communication: `send_message`, `direct_message`, `read_messages`, `set_status`, `report_progress`, `announce`.
 
 ## Bead Completion Verification (MANDATORY)
 
@@ -486,7 +507,8 @@ git branch -r --no-merged main         # Should return empty
 | Tool | Purpose |
 |------|---------|
 | `file_question` | File a question or blocking action for the General (body, context, urgency, category, suggestedOptions) |
-| `send_message` | Send a message (to, body, threadId) — for general comms, not questions |
+| `send_message` | Send a message (to, body, threadId): to the General; to an agent it only stores (pull). For general comms, not questions |
+| `direct_message` | Reach another agent: stores AND injects into its live session. Check `deliveredToSessions` (0 = nobody got it) |
 | `read_messages` | Read messages (threadId, agentId, limit) |
 | `set_status` | Update agent status (working/blocked/idle/done) |
 | `report_progress` | Report task progress (percentage, description) |

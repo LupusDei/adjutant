@@ -246,3 +246,28 @@ describe(".adjutant/PRIME.md — Layer 3/4 preambles carry scoped reads (adj-111
     expect(block).toContain('recipient === "<name>"');
   });
 });
+
+/**
+ * adj-64joz: send_message to an agent only STORES the message (the recipient must
+ * pull it). direct_message stores AND injects into the recipient's live session,
+ * awaited, and reports deliveredToSessions. Agents that don't know this send
+ * pull-only messages to live agents, which the adj-d056y read gap then hides.
+ */
+describe.each(primeVariants)("%s — agent->agent sends use direct_message (adj-64joz)", (_label, content) => {
+  it("should name direct_message as the way to reach another agent", () => {
+    expect(content).toMatch(/To reach another agent[^\n]*`direct_message`/);
+  });
+
+  it("should say send_message to an agent only stores the message", () => {
+    expect(content).toContain("only stores");
+  });
+
+  it("should require checking deliveredToSessions and treating 0 as not delivered", () => {
+    expect(content).toContain("deliveredToSessions");
+    expect(content).toMatch(/deliveredToSessions[^\n]*0[^\n]*nobody/i);
+  });
+
+  it("should name send_message as the fallback for agents with no live session", () => {
+    expect(content).toMatch(/no live session[^\n]*send_message/i);
+  });
+});

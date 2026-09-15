@@ -19,7 +19,7 @@ from the MCP session (not client-supplied).
 
 | Field    | Type   | Required | Description                                      |
 |----------|--------|----------|--------------------------------------------------|
-| to       | string | yes      | Recipient: `"user"` or agent name                |
+| to       | string | yes      | Recipient: `"user"` or agent name. To an agent it only STORES the message (pull); use `direct_message` to deliver live |
 | body     | string | yes      | Message content                                  |
 | threadId | string | no       | Thread ID for conversation grouping              |
 | metadata | object | no       | Arbitrary key-value metadata                     |
@@ -40,6 +40,29 @@ from the MCP session (not client-supplied).
   "timestamp": "2026-02-21T12:00:00.000Z"
 }
 ```
+
+### direct_message
+
+Send a message to ANOTHER AGENT and inject it into that agent's live session, waiting for the
+result. `send_message` only stores a message addressed to an agent. Sender identity is resolved
+server-side from the MCP session.
+
+**Input Schema:**
+
+| Field    | Type   | Required | Description                                                      |
+|----------|--------|----------|------------------------------------------------------------------|
+| to       | string | yes      | Recipient AGENT name. Not `"user"` / `"mayor/"` (use send_message) |
+| body     | string | yes      | Message content, injected into the recipient's session           |
+| threadId | string | no       | Thread ID for conversation grouping                              |
+| metadata | object | no       | Arbitrary key-value metadata                                     |
+
+**Output:** `{ messageId, timestamp, conversationId, deliveredToSessions, sessionsFound }`
+
+- `deliveredToSessions` — live sessions the text was actually injected into. **0 = nobody received it.**
+- `sessionsFound` — sessions on record for that name before delivery (0: none on record; >0: on record but nothing accepted it).
+
+**Errors (nothing stored):** unknown agent name (with "Did you mean" candidates); an agent with no
+injectable session (MCP-only, so use `send_message`); `to` is the Commander.
 
 ### read_messages
 

@@ -35,6 +35,14 @@ MCP messages.
 
 - **On startup and periodically during work**: run the two scoped reads below
 
+### Sending Messages
+
+- **To the General:** \`send_message({ to: "user", body: "..." })\`. It carries the phone push.
+- **To reach another agent, use \`direct_message\`.** It stores the message and injects it into the recipient's live session.
+  \`send_message\` to an agent only stores it, and the recipient has to pull it.
+- **Check \`deliveredToSessions\`.** If it is 0, nobody received it. Say it could not be delivered; never report it as sent.
+- If the recipient has no live session (an MCP-only agent), \`direct_message\` rejects it. Fall back to \`send_message\`.
+
 ### Reading Your Messages (scoped reads — adj-111.1)
 
 **Never call \`read_messages\` without \`agentId\`.** Unscoped reads return other agents' chatter, and you miss orders sent to you.
@@ -143,14 +151,15 @@ bd vc commit -m "session end"          # Before shutting down (if using Dolt bac
 2. **Before \`bd update\` (title, description, status, assignee) or \`bd close\`**, run \`bd show <id>\` and read
    the \`Assignee:\` field. Go ahead only if it is you, it is missing (unassigned) and the bead is in your scope (claim it
    first), or you are the Squad Leader of the assignee. Otherwise do not edit, close, or reassign it.
-   \`send_message\` the assignee instead, or add a note with \`bd comment <id> "..."\`.
+   \`direct_message\` the assignee instead, or add a note with \`bd comment <id> "..."\`.
 
 ## Available MCP Tools
 
 | Tool | Purpose |
 |------|---------|
 | \`file_question\` | File a question or blocking action for the General (body, context, urgency, category, suggestedOptions) |
-| \`send_message\` | Send a message (to, body, threadId) — for general comms, not questions |
+| \`send_message\` | Send a message (to, body, threadId): to the General; to an agent it only stores (pull). For general comms, not questions |
+| \`direct_message\` | Reach another agent: stores AND injects into its live session. Check \`deliveredToSessions\` (0 = nobody got it) |
 | \`read_messages\` | Read messages (threadId, agentId, limit) |
 | \`set_status\` | Update agent status (working/blocked/idle/done) |
 | \`report_progress\` | Report task progress (percentage, description) |

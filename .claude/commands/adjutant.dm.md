@@ -46,6 +46,24 @@ Check that `<agent-name>` matches an agent in the roster (case-insensitive). If 
 - Ask the user to pick one or correct the name
 - Do NOT proceed until a valid agent is confirmed
 
+### Step 0: Prefer the `direct_message` MCP tool (adj-64joz)
+
+If `direct_message` is in your tool list, use it **instead of Steps 3-5**. One call stores the message,
+injects it into the recipient's live session, and waits for the result:
+
+```
+direct_message({ to: "{agent-name}", body: "{message}" })
+// → { messageId, deliveredToSessions, sessionsFound }
+```
+
+- `deliveredToSessions` of 1 or more: delivered. Report it that way in Step 7.
+- `deliveredToSessions: 0` means nobody received it. Report "not delivered" and never "sent". `sessionsFound` says whether a session was even on record.
+- If it's rejected as having no live session (an MCP-only agent), fall back to `send_message({ to: "{agent-name}", ... })`. That agent has to pull it.
+
+The tmux route below (Steps 3-5) is the **fallback** for sessions whose MCP tool list predates
+`direct_message`. A session's tool list is fixed when it connects. Unlike the tool, `send-keys` reports
+no delivery result.
+
 ### Step 3: Check for a live tmux session
 
 Run:
@@ -78,7 +96,7 @@ send_message({ to: "{agent-name}", body: "{message}" })
 ```
 
 This ensures:
-- The message appears in the agent's MCP inbox
+- The message is stored under YOUR id with `recipient: {agent-name}`. It will NOT show in the recipient's `read_messages({ agentId: "{agent-name}" })`. They find it with `read_messages({ agentId: "<your-name>" })`, filtered to recipient (adj-d056y)
 - The message is visible on the Adjutant dashboard
 - The agent can read it even if they weren't active during tmux injection
 
@@ -87,7 +105,7 @@ This ensures:
 If the message asks a question or requests information, append this instruction to BOTH the tmux and MCP message:
 
 ```
-Please respond via Adjutant MCP: send_message({ to: "{your-agent-name}", body: "your response" })
+Please respond via Adjutant MCP: direct_message({ to: "{your-agent-name}", body: "your response" }) (or send_message if you do not have direct_message)
 ```
 
 This tells the receiving agent how to reply back through the proper channel.
