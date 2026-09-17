@@ -38,8 +38,13 @@ vi.mock("../../src/services/session-bridge.js", () => ({
 
 // Mock tmux
 const mockListTmuxSessions = vi.fn();
-vi.mock("../../src/services/tmux.js", () => ({
+const mockPaneCurrentCommand = vi.fn();
+vi.mock("../../src/services/tmux.js", async (importOriginal) => ({
+  // Keep the real isShellPaneCommand — the list of shells is the thing under test,
+  // and a stubbed predicate would make the adj-c55l3 tests prove nothing.
+  ...(await importOriginal<typeof import("../../src/services/tmux.js")>()),
   listTmuxSessions: () => mockListTmuxSessions(),
+  getPaneCurrentCommand: (...args: unknown[]) => mockPaneCurrentCommand(...args),
 }));
 
 // Mock persona service
@@ -52,8 +57,16 @@ vi.mock("../../src/services/persona-service.js", () => ({
 
 // Mock worktree service (adj-182.5) — never run real git in unit tests.
 const mockProvisionAgentWorktree = vi.fn();
+const mockResolveWorktreeDoltEnv = vi.fn(() => ({ port: 17000, exportLine: "BEADS_DOLT_SERVER_PORT=17000" }));
 vi.mock("../../src/services/worktree-service.js", () => ({
   provisionAgentWorktree: (...args: unknown[]) => mockProvisionAgentWorktree(...args),
+  resolveWorktreeDoltEnv: (...args: unknown[]) => mockResolveWorktreeDoltEnv(...(args as [])),
+}));
+
+// Mock transcript discovery (adj-dpgqc) — no real ~/.claude reads in unit tests.
+const mockListResumableSessions = vi.fn();
+vi.mock("../../src/services/transcript-discovery.js", () => ({
+  listResumableSessions: (...args: unknown[]) => mockListResumableSessions(...args),
 }));
 
 import {
@@ -229,6 +242,9 @@ describe("agent-spawner-service", () => {
       mockListTmuxSessions.mockResolvedValue(
         new Set(["adj-swarm-test-agent"])
       );
+      // adj-c55l3: exports only go to a pane at a shell prompt. The agent exited here
+      // and left its shell behind, which is the case where re-exporting still helps.
+      mockPaneCurrentCommand.mockResolvedValue("zsh");
       mockFindByTmuxSession.mockReturnValue({ name: "test-agent" });
       mockGetPersonaByCallsign.mockReturnValue({ id: "persona-123", name: "Test Persona" });
       mockExportEnvVars.mockResolvedValue(undefined);
@@ -265,6 +281,8 @@ describe("agent-spawner-service", () => {
       mockListTmuxSessions.mockResolvedValue(
         new Set(["adj-swarm-test-agent"])
       );
+      // adj-c55l3: shell pane — exports are safe and useful here.
+      mockPaneCurrentCommand.mockResolvedValue("zsh");
       mockFindByTmuxSession.mockReturnValue({ name: "test-agent" });
       // Persona service would return a different ID
       mockGetPersonaByCallsign.mockReturnValue({ id: "auto-456", name: "Auto" });
@@ -666,5 +684,162 @@ describe("agent-spawner-service", () => {
       const alive = await isAgentAlive("test-agent");
       expect(alive).toBe(false);
     });
+  });
+});
+
+// ============================================================================
+// Resume (adj-dpgqc) + no stray exports into a live pane (adj-c55l3)
+// ============================================================================
+
+describe("spawnAgent — resume from a transcript (adj-dpgqc)", () => {
+  const RESUME_ID = "ccc9f2df-5b0b-428a-a3f9-323c51d1c388";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListTmuxSessions.mockResolvedValue(new Set());
+    mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-resume" });
+    mockProvisionAgentWorktree.mockResolvedValue("/repo/worktrees/kerrigan");
+    mockResolveWorktreeDoltEnv.mockReturnValue({ port: 17001, exportLine: "BEADS_DOLT_SERVER_PORT=17001" });
+    mockListResumableSessions.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "2026-09-17T00:00:00.000Z", sizeBytes: 10 },
+    ]);
+    mockGetPersonaByCallsign.mockReturnValue(undefined);
+    mockReadFile.mockRejectedValue(new Error("ENOENT"));
+  });
+
+  it("should pass the resume id through to createSession", async () => {
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "kerrigan",
+        projectPath: "/repo/worktrees/kerrigan",
+        resumeSessionId: RESUME_ID,
+      }),
+    );
+  });
+
+  it("should NOT inject constitution, persona or genesis into a resumed session", async () => {
+    // The transcript already holds all of it. Re-injecting means the agent wakes to a
+    // wall of boilerplate as its newest instruction instead of the work it was doing.
+    mockReadFile.mockResolvedValue("# Constitution\nRule 1: test first");
+    mockGetPersonaByCallsign.mockReturnValue({ id: "persona-1", name: "Kerrigan" });
+
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+      personaPrompt: "You are Kerrigan.",
+    });
+
+    const arg = mockBridgeCreateSession.mock.calls[0]![0] as { initialPrompt?: string };
+    expect(arg.initialPrompt).toBeUndefined();
+  });
+
+  it("should deliver only the resume note, so the agent learns what happened", async () => {
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+      resumeNote: "The host kernel-panicked at 20:54 and rebooted. Your worktree is intact.",
+    });
+
+    const arg = mockBridgeCreateSession.mock.calls[0]![0] as { initialPrompt?: string };
+    expect(arg.initialPrompt).toBe(
+      "The host kernel-panicked at 20:54 and rebooted. Your worktree is intact.",
+    );
+  });
+
+  it("should refuse when the transcript does not belong to the resolved working directory", async () => {
+    // `claude --resume <id>` resolves the session against the CWD it starts in. Resuming
+    // from the wrong directory silently starts a different (or empty) session.
+    mockListResumableSessions.mockResolvedValue([
+      { sessionId: "some-other-session-id-0001", transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "x", sizeBytes: 1 },
+    ]);
+
+    const result = await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found/i);
+    expect(mockBridgeCreateSession).not.toHaveBeenCalled();
+  });
+
+  it("should refuse to resume when the agent's tmux session is already running", async () => {
+    // Adoption is right for a live pane; resuming would start a SECOND claude on the
+    // same transcript.
+    mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-kerrigan"]));
+
+    const result = await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/already (exists|running)/i);
+    expect(mockBridgeCreateSession).not.toHaveBeenCalled();
+    expect(mockExportEnvVars).not.toHaveBeenCalled();
+  });
+});
+
+describe("spawnAgent — adoption must not type into a live pane (adj-c55l3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-kerrigan"]));
+    mockFindByTmuxSession.mockReturnValue({ id: "s1", name: "kerrigan", projectPath: "/repo" });
+    mockGetPersonaByCallsign.mockReturnValue({ id: "persona-1", name: "Kerrigan" });
+  });
+
+  it("should NOT send exports when the pane is running Claude", async () => {
+    // send-keys into a running Claude TUI types the text into its input box and submits
+    // it: the agent burns a turn reading `export ADJUTANT_PERSONA_ID=…`. Observed twice
+    // on 2026-09-17. The env is already baked into the running process anyway.
+    mockPaneCurrentCommand.mockResolvedValue("claude");
+
+    const result = await spawnAgent({ name: "kerrigan", projectPath: "/repo" });
+
+    expect(result.success).toBe(true);
+    expect(mockExportEnvVars).not.toHaveBeenCalled();
+  });
+
+  it("should still send exports when the pane is a bare shell", async () => {
+    // Agent exited, shell survived: a later manual `claude` inherits the identity.
+    mockPaneCurrentCommand.mockResolvedValue("zsh");
+
+    await spawnAgent({ name: "kerrigan", projectPath: "/repo" });
+
+    expect(mockExportEnvVars).toHaveBeenCalledWith(
+      "adj-swarm-kerrigan",
+      expect.objectContaining({ ADJUTANT_PERSONA_ID: "persona-1" }),
+    );
+  });
+
+  it("should skip exports when the pane command cannot be read — never type blind", async () => {
+    mockPaneCurrentCommand.mockRejectedValue(new Error("no such pane"));
+
+    await spawnAgent({ name: "kerrigan", projectPath: "/repo" });
+
+    expect(mockExportEnvVars).not.toHaveBeenCalled();
+  });
+
+  it("should treat a node-wrapped claude pane as live (command reported as 'node')", async () => {
+    mockPaneCurrentCommand.mockResolvedValue("node");
+
+    await spawnAgent({ name: "kerrigan", projectPath: "/repo" });
+
+    expect(mockExportEnvVars).not.toHaveBeenCalled();
   });
 });

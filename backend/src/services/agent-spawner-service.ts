@@ -18,7 +18,8 @@ import { logInfo, logWarn } from "../utils/index.js";
 import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import type { SessionMode } from "./session-registry.js";
-import { listTmuxSessions } from "./tmux.js";
+import { listTmuxSessions, getPaneCurrentCommand, isShellPaneCommand } from "./tmux.js";
+import { listResumableSessions } from "./transcript-discovery.js";
 import { getPersonaService } from "./persona-service.js";
 import { provisionAgentWorktree, resolveWorktreeDoltEnv } from "./worktree-service.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "./adjutant/genesis-prompt.js";
@@ -145,6 +146,22 @@ export interface SpawnAgentRequest {
    * "worktree".
    */
   isolation?: "worktree" | "none";
+  /**
+   * Resume the agent from an existing Claude Code transcript instead of starting it
+   * cold (adj-dpgqc). The id comes from {@link listResumableSessions}.
+   *
+   * A resumed agent already carries its constitution, persona and mission in the
+   * transcript, so NONE of those are re-injected — waking an agent to a wall of
+   * boilerplate as its newest instruction is how you lose the thread it was on.
+   */
+  resumeSessionId?: string;
+  /**
+   * Short note delivered once the resumed agent is responsive — the one thing the
+   * transcript cannot contain, namely what happened while it was dead
+   * ("the host rebooted at 20:54; your worktree is intact"). Without it the agent
+   * resumes mid-thought with no idea time has passed.
+   */
+  resumeNote?: string;
 }
 
 export interface SpawnAgentResult {
@@ -157,6 +174,52 @@ export interface SpawnAgentResult {
 // ============================================================================
 // Public API
 // ============================================================================
+
+/**
+ * Is this pane sitting at a shell prompt (safe to type into)? (adj-c55l3)
+ *
+ * Fails CLOSED: if the pane command cannot be read we answer "no". Typing blind into
+ * a pane that might be a live agent is the failure this guard exists to prevent, and
+ * the cost of a wrong "no" is only a skipped env re-export.
+ */
+async function paneIsAtShellPrompt(tmuxSession: string): Promise<boolean> {
+  try {
+    const command = await getPaneCurrentCommand(tmuxSession);
+    return isShellPaneCommand(command);
+  } catch (err) {
+    logWarn("Could not read pane command — treating pane as busy (adj-c55l3)", {
+      tmuxSession,
+      error: String(err),
+    });
+    return false;
+  }
+}
+
+/**
+ * Schedule the post-spawn MCP connect check. Shared by the spawn and resume paths:
+ * a resumed agent that never reconnects is just as dead as one that never started.
+ */
+function scheduleSpawnHealthCheck(name: string, tmuxSession: string): void {
+  // Cancel any existing health check for this agent (prevents orphan timers
+  // if spawnAgent is called twice for the same name before the first expires)
+  cancelSpawnHealthCheck(name);
+
+  const timer = setTimeout(() => {
+    pendingHealthChecks.delete(name);
+    getEventBus().emit("agent:spawn_failed", {
+      agentId: name,
+      reason: "no_mcp_connect",
+      tmuxSession,
+    });
+    logWarn("Spawn health check failed — agent did not connect via MCP", {
+      name,
+      tmuxSession,
+    });
+  }, SPAWN_HEALTH_CHECK_DELAY_MS);
+  // Don't block Node.js exit on this timer
+  timer.unref();
+  pendingHealthChecks.set(name, timer);
+}
 
 /**
  * Spawn a Claude Code agent in a tmux session.
@@ -183,6 +246,23 @@ export async function spawnAgent(
     const bridge = getSessionBridge();
 
     if (sessions.has(tmuxSession)) {
+      // adj-dpgqc: a resume must never run against a live pane. Adoption is the right
+      // move for an agent that is already up; resuming would start a SECOND claude on
+      // the same transcript and the two would fight over the same worktree.
+      if (req.resumeSessionId) {
+        logWarn("Refusing to resume — tmux session already running", {
+          name: req.name,
+          tmuxSession,
+        });
+        return {
+          success: false,
+          error:
+            `Agent '${req.name}' is already running in tmux session '${tmuxSession}'. ` +
+            `Kill it first if you really want to resume from a transcript.`,
+          tmuxSession,
+        };
+      }
+
       // Tmux session exists — ensure it's tracked in the registry so it
       // appears in the agents list. Without this, an orphaned session
       // (survived a backend restart) would be invisible to the dashboard.
@@ -213,8 +293,22 @@ export async function spawnAgent(
           }
         }
       }
+      // adj-c55l3: only a pane sitting at a SHELL prompt may be typed into.
+      // exportEnvVars uses `send-keys "export K=V" Enter`; against a running Claude
+      // Code TUI that is not a shell command at all — it is typed into Claude's input
+      // box and submitted, costing the agent a turn and polluting its transcript
+      // (observed twice on 2026-09-17). A running process cannot pick up a new env var
+      // anyway, so the exports would be dead weight even if they landed cleanly.
       if (Object.keys(envVars).length > 0) {
-        await bridge.lifecycle.exportEnvVars(tmuxSession, envVars);
+        const paneIsShell = await paneIsAtShellPrompt(tmuxSession);
+        if (paneIsShell) {
+          await bridge.lifecycle.exportEnvVars(tmuxSession, envVars);
+        } else {
+          logInfo("Skipping env re-export — pane is not at a shell prompt (adj-c55l3)", {
+            name: req.name,
+            tmuxSession,
+          });
+        }
       }
 
       logInfo("Agent session already exists, skipping spawn", {
@@ -251,6 +345,53 @@ export async function spawnAgent(
           name: req.name,
         });
       }
+    }
+
+    // adj-dpgqc: a resume is a different act from a spawn. `claude --resume <id>`
+    // resolves the session against the directory it starts in, so verify the
+    // transcript actually belongs to the directory we are about to launch in —
+    // otherwise Claude quietly starts a different session and the agent comes back
+    // as a stranger.
+    if (req.resumeSessionId) {
+      const resumable = await listResumableSessions({ projectPath: effectiveProjectPath });
+      if (!resumable.some((s) => s.sessionId === req.resumeSessionId)) {
+        logWarn("Refusing to resume — transcript not found for working directory", {
+          name: req.name,
+          projectPath: effectiveProjectPath,
+          resumeSessionId: req.resumeSessionId,
+        });
+        return {
+          success: false,
+          error:
+            `Session '${req.resumeSessionId}' not found for ${effectiveProjectPath}. ` +
+            `List the agent's resumable sessions and pick one recorded for that directory.`,
+        };
+      }
+
+      const resumeResult = await bridge.createSession({
+        name: req.name,
+        projectPath: effectiveProjectPath,
+        mode: (req.mode ?? "swarm") as SessionMode,
+        resumeSessionId: req.resumeSessionId,
+        // The transcript IS the context: no constitution, no persona, no genesis.
+        ...(req.resumeNote ? { initialPrompt: req.resumeNote } : {}),
+        ...(Object.keys({ ...req.envVars, ...isolationEnv }).length > 0
+          ? { envVars: { ...req.envVars, ...isolationEnv } }
+          : {}),
+      });
+
+      if (!resumeResult.success) {
+        logWarn("Agent resume failed", { name: req.name, error: resumeResult.error });
+        return { success: false, error: resumeResult.error };
+      }
+
+      logInfo("Agent resumed from transcript", {
+        name: req.name,
+        sessionId: resumeResult.sessionId,
+        resumeSessionId: req.resumeSessionId,
+      });
+      scheduleSpawnHealthCheck(req.name, tmuxSession);
+      return { success: true, sessionId: resumeResult.sessionId, tmuxSession };
     }
 
     // Constitution injection (adj-160): Read project constitution and inject
@@ -336,26 +477,7 @@ export async function spawnAgent(
         sessionId: result.sessionId,
       });
 
-      // Cancel any existing health check for this agent (prevents orphan timers
-      // if spawnAgent is called twice for the same name before the first expires)
-      cancelSpawnHealthCheck(req.name);
-
-      // Schedule health check — verify agent connects via MCP within timeout
-      const timer = setTimeout(() => {
-        pendingHealthChecks.delete(req.name);
-        getEventBus().emit("agent:spawn_failed", {
-          agentId: req.name,
-          reason: "no_mcp_connect",
-          tmuxSession,
-        });
-        logWarn("Spawn health check failed — agent did not connect via MCP", {
-          name: req.name,
-          tmuxSession,
-        });
-      }, SPAWN_HEALTH_CHECK_DELAY_MS);
-      // Don't block Node.js exit on this timer
-      timer.unref();
-      pendingHealthChecks.set(req.name, timer);
+      scheduleSpawnHealthCheck(req.name, tmuxSession);
 
       return {
         success: true,

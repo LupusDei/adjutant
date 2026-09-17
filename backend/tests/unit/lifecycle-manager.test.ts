@@ -783,3 +783,204 @@ describe("LifecycleManager", () => {
     });
   });
 });
+
+// ============================================================================
+// Resume (adj-dpgqc)
+//
+// After the 2026-09-16 kernel panic every tmux session died while every Claude
+// transcript survived. Resuming has to produce a session that is registered — and
+// therefore injectable and terminal-streamable — from the first second, because the
+// manual recipe's second `spawn_worker` adoption call is exactly what we are
+// removing.
+// ============================================================================
+
+describe("LifecycleManager — resume", () => {
+  let registry: SessionRegistry;
+  let lifecycle: LifecycleManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testDb = createTestDb();
+    registry = new SessionRegistry(testDb);
+    lifecycle = new LifecycleManager(registry, 5);
+    mockExecFile.mockImplementation(
+      (
+        _cmd: string,
+        args: string[],
+        _opts: unknown,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        if (args[0] === "has-session") {
+          cb(new Error("no session"), "", "no session");
+        } else if (args[0] === "list-panes") {
+          const tIdx = args.indexOf("-t");
+          const sessionName = tIdx >= 0 ? args[tIdx + 1] : "test";
+          cb(null, `${sessionName}:1.1\n`, "");
+        } else {
+          cb(null, "", "");
+        }
+      }
+    );
+  });
+
+  afterEach(() => {
+    if (testDb) testDb.close();
+  });
+
+  /** The send-keys line that launches claude (the one naming the binary). */
+  function launchLine(): string {
+    const sendKeys = mockExecFile.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[])[0] === "send-keys")
+      .map((call: unknown[]) => (call[1] as string[]).join(" "));
+    return sendKeys.find((line: string) => line.includes(" claude ")) ?? "";
+  }
+
+  it("should launch claude with --resume <sessionId>", async () => {
+    await lifecycle.createSession({
+      name: "kerrigan",
+      projectPath: "/Users/x/code/6lock/worktrees/kerrigan",
+      resumeSessionId: "5f70e05b-c516-46f7-83da-1b0168822052",
+    });
+
+    expect(launchLine()).toContain("--resume 5f70e05b-c516-46f7-83da-1b0168822052");
+  });
+
+  it("should keep --dangerously-skip-permissions and the identity env prefix when resuming (adj-vevei)", async () => {
+    await lifecycle.createSession({
+      name: "kerrigan",
+      projectPath: "/worktrees/kerrigan",
+      resumeSessionId: "1a2b3c4d-1111-4aaa-9bbb-000000000001",
+      envVars: { ADJUTANT_PERSONA_ID: "persona-9", BEADS_DOLT_SERVER_PORT: "17001" },
+    });
+
+    const line = launchLine();
+    expect(line).toContain("ADJUTANT_AGENT_ID=kerrigan");
+    // Paths are single-quoted by shellEscape — they contain "/".
+    expect(line).toContain("ADJUTANT_PROJECT_ROOT='/worktrees/kerrigan'");
+    expect(line).toContain("ADJUTANT_PERSONA_ID=persona-9");
+    expect(line).toContain("BEADS_DOLT_SERVER_PORT=17001");
+    expect(line).toContain("--dangerously-skip-permissions");
+    // The env assignments must come before the binary, or they are just arguments.
+    expect(line.indexOf("ADJUTANT_AGENT_ID=")).toBeLessThan(line.indexOf(" claude "));
+  });
+
+  it("should register the session BEFORE returning so the agent is injectable immediately", async () => {
+    const result = await lifecycle.createSession({
+      name: "zeratul",
+      projectPath: "/worktrees/zeratul",
+      resumeSessionId: "1a2b3c4d-2222-4aaa-9bbb-000000000002",
+    });
+
+    expect(result.success).toBe(true);
+    const session = registry.get(result.sessionId!);
+    expect(session).toBeDefined();
+    expect(session!.name).toBe("zeratul");
+    expect(session!.tmuxSession).toBe("adj-swarm-zeratul");
+    expect(session!.tmuxPane).toBe("adj-swarm-zeratul:1.1");
+  });
+
+  it("should reject a session id that is not a plausible Claude session id", async () => {
+    const result = await lifecycle.createSession({
+      name: "zeratul",
+      projectPath: "/worktrees/zeratul",
+      // A shell metacharacter here would otherwise ride the send-keys line.
+      resumeSessionId: "abc; rm -rf ~",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/session id/i);
+    const launched = mockExecFile.mock.calls.filter(
+      (call: unknown[]) => (call[1] as string[])[0] === "new-session"
+    );
+    expect(launched).toHaveLength(0);
+  });
+
+  it("should refuse to resume when the tmux session already exists", async () => {
+    mockExecFile.mockImplementation(
+      (
+        _cmd: string,
+        args: string[],
+        _opts: unknown,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        if (args[0] === "has-session") {
+          cb(null, "", ""); // session EXISTS
+        } else {
+          cb(null, "", "");
+        }
+      }
+    );
+
+    const result = await lifecycle.createSession({
+      name: "kerrigan",
+      projectPath: "/worktrees/kerrigan",
+      resumeSessionId: "1a2b3c4d-3333-4aaa-9bbb-000000000003",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("already exists");
+  });
+
+  it("should deliver a resume note only after Claude is ready", async () => {
+    vi.useFakeTimers();
+    try {
+      mockExecFile.mockImplementation(
+        (
+          _cmd: string,
+          args: string[],
+          _opts: unknown,
+          cb: (err: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          if (args[0] === "has-session") {
+            cb(new Error("no session"), "", "no session");
+          } else if (args[0] === "list-panes") {
+            cb(null, "adj-swarm-nova:1.1\n", "");
+          } else if (args[0] === "capture-pane") {
+            cb(null, "Claude Code ready > ", "");
+          } else {
+            cb(null, "", "");
+          }
+        }
+      );
+
+      const sessionPromise = lifecycle.createSession({
+        name: "nova",
+        projectPath: "/worktrees/nova",
+        resumeSessionId: "1a2b3c4d-4444-4aaa-9bbb-000000000004",
+        initialPrompt: "Kernel panic at 20:54 rebooted the host; your disk state is intact.",
+      });
+      for (let i = 0; i < 40; i++) {
+        await vi.advanceTimersByTimeAsync(500);
+      }
+      await sessionPromise;
+
+      const calls = mockExecFile.mock.calls.map((call: unknown[]) => call[1] as string[]);
+      const launchIdx = calls.findIndex(
+        (a) => a[0] === "send-keys" && a.join(" ").includes(" claude "),
+      );
+      const pasteIdx = calls.findIndex((a) => a[0] === "paste-buffer");
+      const captureIdx = calls.findIndex((a) => a[0] === "capture-pane");
+
+      expect(launchIdx).toBeGreaterThan(-1);
+      expect(pasteIdx).toBeGreaterThan(launchIdx);
+      // Readiness is polled with capture-pane before the note is pasted.
+      expect(captureIdx).toBeGreaterThan(-1);
+      expect(captureIdx).toBeLessThan(pasteIdx);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 15_000);
+
+  it("should not send a note when none is given — the transcript is the context", async () => {
+    await lifecycle.createSession({
+      name: "nova",
+      projectPath: "/worktrees/nova",
+      resumeSessionId: "1a2b3c4d-5555-4aaa-9bbb-000000000005",
+    });
+
+    const pastes = mockExecFile.mock.calls.filter(
+      (call: unknown[]) => (call[1] as string[])[0] === "paste-buffer"
+    );
+    expect(pastes).toHaveLength(0);
+  });
+});

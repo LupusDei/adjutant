@@ -23,6 +23,19 @@ export interface CreateSessionRequest {
   envVars?: Record<string, string> | undefined;
   /** Prompt to inject into the session after Claude starts (via tmux send-keys). */
   initialPrompt?: string | undefined;
+  /**
+   * Resume an existing Claude Code session instead of starting a fresh one (adj-dpgqc).
+   *
+   * The id comes from the agent's transcript (see transcript-discovery). The launch
+   * becomes `claude --dangerously-skip-permissions --resume <id>` with the same env
+   * prefix a normal spawn gets, so the agent comes back as ITSELF: same context, same
+   * identity, registered from the first second.
+   *
+   * There is no initial prompt to send on a resume — the transcript IS the context —
+   * but `initialPrompt` still works and is the place for a short note about what
+   * happened (e.g. "the host rebooted at 20:54"), delivered once Claude is responsive.
+   */
+  resumeSessionId?: string | undefined;
 }
 
 export interface CreateSessionResult {
@@ -67,6 +80,20 @@ const SUBMIT_CONFIRM_SAMPLES = 3;
 
 /** Max Enter RE-SENDS (not re-pastes) when submission isn't confirmed. */
 const SUBMIT_RETRIES = 3;
+
+/**
+ * A Claude Code session id, as it appears in `~/.claude/projects/<dir>/<id>.jsonl`.
+ *
+ * Validated rather than escaped: this value is interpolated into a command line that
+ * is typed into a live shell, so the only safe policy is to refuse anything that is
+ * not the shape we expect. Claude writes UUIDs; we allow the slightly wider
+ * hex/dash/underscore set and nothing else.
+ */
+const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
+
+export function isPlausibleClaudeSessionId(value: string): boolean {
+  return SESSION_ID_PATTERN.test(value);
+}
 
 /** Escape a string for safe use in a shell command sent via tmux send-keys. */
 function shellEscape(s: string): string {
@@ -173,6 +200,16 @@ export class LifecycleManager {
       };
     }
 
+    // adj-dpgqc: refuse a resume id we cannot vouch for BEFORE creating anything.
+    // The id rides a command line typed into a live shell, so a metacharacter here
+    // would execute. Nothing is created when this fails.
+    if (req.resumeSessionId !== undefined && !isPlausibleClaudeSessionId(req.resumeSessionId)) {
+      return {
+        success: false,
+        error: `Invalid resume session id '${req.resumeSessionId}' — expected a Claude session id (letters, digits, '-', '_')`,
+      };
+    }
+
     const tmuxSessionName = this.generateTmuxName(req.name, req.mode);
 
     // Check if tmux session already exists
@@ -247,7 +284,13 @@ export class LifecycleManager {
       // Start Claude Code in the session
       // Always include --dangerously-skip-permissions so agents don't block on prompts.
       // Custom claudeArgs are appended after the mandatory flag.
+      // adj-dpgqc: --resume makes Claude reopen the transcript instead of starting
+      // cold. It keeps --dangerously-skip-permissions: a resumed agent must no more
+      // block on a permission prompt than a fresh one.
       const baseArgs = ["--dangerously-skip-permissions"];
+      if (req.resumeSessionId) {
+        baseArgs.push("--resume", req.resumeSessionId);
+      }
       const extraArgs = req.claudeArgs?.filter((a) => a !== "--dangerously-skip-permissions") ?? [];
       // adj-vevei: inline the identity env vars ON the claude launch command — not
       // only via the earlier `export` send-keys. If the pane shell was not ready when
@@ -299,6 +342,7 @@ export class LifecycleManager {
         sessionId: session.id,
         tmuxSession: tmuxSessionName,
         hasInitialPrompt: !!req.initialPrompt,
+        ...(req.resumeSessionId ? { resumedFrom: req.resumeSessionId } : {}),
       });
 
       return { success: true, sessionId: session.id };
