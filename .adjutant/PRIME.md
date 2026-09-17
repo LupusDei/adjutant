@@ -102,6 +102,14 @@ If a Squad Member finds a critical bug outside their mission scope:
 3. The Squad Leader escalates to the General if it's blocking or urgent
 4. Do NOT fix it yourself — it belongs to a different mission
 
+#### An Agent Died (crash, reboot, killed session)
+If an agent's session is gone but its work is not (a host reboot, a killed tmux session):
+1. `list_resumable_sessions({ agentName })` — the sessions it can be resumed from, newest first
+2. `spawn_worker({ agentName, resumeSessionId, resumeNote: "<what happened while it was down>" })`
+3. **Resume, do NOT respawn.** A respawned agent has no memory of the work it was in the
+   middle of and will redo or undo it. A resumed agent keeps its context and its
+   in-process teammates. See `docs/session-resume.md`.
+
 #### Coordinator Unavailable
 If the Coordinator is down or unreachable:
 1. Squad Leaders continue their assigned missions autonomously
