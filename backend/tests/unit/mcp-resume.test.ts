@@ -34,6 +34,16 @@ vi.mock("../../src/services/transcript-discovery.js", () => ({
   listResumableSessionsForAgent: (...args: unknown[]) => mockListResumableSessionsForAgent(...args),
 }));
 
+const mockPlanFleetResume = vi.fn();
+vi.mock("../../src/services/fleet-resume-planner.js", () => ({
+  planFleetResume: (...args: unknown[]) => mockPlanFleetResume(...args),
+}));
+
+const mockListTmuxSessions = vi.fn();
+vi.mock("../../src/services/tmux.js", () => ({
+  listTmuxSessions: () => mockListTmuxSessions(),
+}));
+
 const mockFindByName = vi.fn(() => [] as { projectPath: string }[]);
 vi.mock("../../src/services/session-bridge.js", () => ({
   getSessionBridge: () => ({
@@ -108,6 +118,8 @@ beforeEach(() => {
   mockGetAgentBySession.mockReturnValue("adjutant-coordinator");
   mockFindByName.mockReturnValue([]);
   mockSpawnAgent.mockResolvedValue({ success: true, sessionId: "new-session" });
+  mockListTmuxSessions.mockResolvedValue(new Set<string>());
+  mockPlanFleetResume.mockResolvedValue({ dryRun: true, resumable: [], skipped: [] });
 });
 
 // ============================================================================
@@ -271,5 +283,76 @@ describe("spawn_worker — resume options", () => {
 
     expect(body["success"]).toBe(false);
     expect(String(body["error"])).toContain("already running");
+  });
+});
+
+// ============================================================================
+// plan_fleet_resume (adj-dpgqc item 4)
+// ============================================================================
+
+describe("plan_fleet_resume", () => {
+  const PROPOSAL = {
+    agentName: "kerrigan",
+    sessionId: "kerrigan-session-1",
+    cwd: "/repo/worktrees/kerrigan",
+    lastActivityAt: "2026-09-16T20:53:00.000Z",
+    modifiedAt: "2026-09-16T20:53:10.000Z",
+    lastPrompt: "merge the epic",
+    sessionCount: 2,
+    resumeCommand: {
+      tool: "spawn_worker",
+      args: { agentName: "kerrigan", projectPath: "/repo", resumeSessionId: "kerrigan-session-1" },
+    },
+  };
+
+  it("should return the plan with its proposals and skips", async () => {
+    mockPlanFleetResume.mockResolvedValue({
+      dryRun: true,
+      resumable: [PROPOSAL],
+      skipped: [{ agentName: "nova", reason: "running" }],
+    });
+    const tools = await registerTools();
+
+    const body = parse(
+      await tools.get("plan_fleet_resume")!.handler({ projectPath: "/repo" }, COORDINATOR),
+    );
+
+    expect(body["success"]).toBe(true);
+    expect(body["dryRun"]).toBe(true);
+    expect(body["resumable"]).toEqual([PROPOSAL]);
+    expect(body["skipped"]).toEqual([{ agentName: "nova", reason: "running" }]);
+  });
+
+  it("should tell the planner which tmux sessions are alive right now", async () => {
+    mockListTmuxSessions.mockResolvedValue(new Set(["adj-swarm-nova"]));
+    const tools = await registerTools();
+
+    await tools.get("plan_fleet_resume")!.handler({ projectPath: "/repo" }, COORDINATOR);
+
+    expect(mockPlanFleetResume).toHaveBeenCalledWith(
+      expect.objectContaining({ liveTmuxSessions: new Set(["adj-swarm-nova"]) }),
+    );
+  });
+
+  it("should NEVER spawn anything — planning only", async () => {
+    mockPlanFleetResume.mockResolvedValue({ dryRun: true, resumable: [PROPOSAL], skipped: [] });
+    const tools = await registerTools();
+
+    await tools.get("plan_fleet_resume")!.handler({ projectPath: "/repo" }, COORDINATOR);
+
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+  });
+
+  it("should refuse a caller that is not the coordinator", async () => {
+    mockGetAgentBySession.mockReturnValue("raynor");
+    const tools = await registerTools();
+
+    const result = await tools.get("plan_fleet_resume")!.handler(
+      { projectPath: "/repo" },
+      { sessionId: "sess-raynor" },
+    );
+
+    expect((result as unknown as { isError?: boolean }).isError).toBe(true);
+    expect(mockPlanFleetResume).not.toHaveBeenCalled();
   });
 });

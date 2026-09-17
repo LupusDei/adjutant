@@ -11,6 +11,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { spawnAgent } from "../agent-spawner-service.js";
 import { listResumableSessionsForAgent } from "../transcript-discovery.js";
+import { planFleetResume } from "../fleet-resume-planner.js";
+import { listTmuxSessions } from "../tmux.js";
 import { updateBead } from "../beads/beads-mutations.js";
 import { getSessionBridge } from "../session-bridge.js";
 import { getEventBus } from "../event-bus.js";
@@ -383,6 +385,69 @@ export function registerCoordinationTools(
       logInfo("list_resumable_sessions", { agentName, count: sessions.length });
 
       return jsonResult({ success: true, agentName, sessions });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // plan_fleet_resume (adj-dpgqc)
+  // --------------------------------------------------------------------------
+  server.tool(
+    "plan_fleet_resume",
+    [
+      "Survey the fleet after a crash or reboot: which agents are down but have a",
+      "transcript to come back from, and which are already running.",
+      "",
+      "DRY RUN ONLY — this spawns nothing. Each proposal carries the exact spawn_worker",
+      "call that would execute it, so the General decides who returns and in what order.",
+      "That is deliberate: resuming everyone at once spends real tokens on agents nobody",
+      "asked for and puts several of them back to work on branches that have moved.",
+      "",
+      "Proposals are ordered newest-activity first, and each names what that agent was",
+      "last asked to do so a human can judge whether it is still worth resuming.",
+    ].join("\n"),
+    {
+      projectPath: z
+        .string()
+        .optional()
+        .describe("Project root to survey. Defaults to the server's project root."),
+      agentNames: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Extra agents to consider beyond the worktree directories — e.g. 'adjutant-coordinator', which runs in the main repo and has no worktree.",
+        ),
+    },
+    async ({ projectPath, agentNames }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      const projectRoot = projectPath ?? process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
+
+      // What is alive RIGHT NOW, asked of tmux rather than the registry: after a host
+      // reboot the registry still lists sessions whose processes died with the machine.
+      let liveTmuxSessions: Set<string>;
+      try {
+        liveTmuxSessions = await listTmuxSessions();
+      } catch {
+        liveTmuxSessions = new Set();
+      }
+
+      const plan = await planFleetResume({
+        projectRoot,
+        liveTmuxSessions,
+        ...(agentNames ? { agentNames } : {}),
+      });
+
+      logInfo("plan_fleet_resume", {
+        projectRoot,
+        resumable: plan.resumable.length,
+        skipped: plan.skipped.length,
+      });
+
+      return jsonResult({ success: true, ...plan });
     },
   );
 

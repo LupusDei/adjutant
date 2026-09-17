@@ -41,6 +41,22 @@ The dashboard reads the same list from `GET /api/agents/:agentId/sessions`.
 happened while the agent was dead. Without it the agent picks up mid-thought with no idea
 that time passed, that the host rebooted, or that its tmux session is new.
 
+## After a reboot: survey first
+
+```
+plan_fleet_resume({})
+→ { dryRun: true,
+    resumable: [ { agentName, sessionId, lastActivityAt, lastPrompt, sessionCount, resumeCommand } ],
+    skipped:   [ { agentName, reason: "running" | "no-transcript" } ] }
+```
+
+It spawns nothing. Each proposal carries the exact `spawn_worker` call that would execute
+it, ordered newest-activity first, with what that agent was last asked to do. Bringing the
+whole fleet back at once spends real tokens on agents nobody asked for and puts several of
+them onto branches that have since moved — on the night of the panic the General resumed
+kerrigan, watched it, then nova and zeratul, and left the rest down. The sweep keeps that
+choice where it belongs.
+
 ## What the resume does and does not do
 
 - Launches `claude --dangerously-skip-permissions --resume <id>` behind the same env
