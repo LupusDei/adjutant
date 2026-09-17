@@ -65,8 +65,10 @@ vi.mock("../../src/services/worktree-service.js", () => ({
 
 // Mock transcript discovery (adj-dpgqc) — no real ~/.claude reads in unit tests.
 const mockListResumableSessions = vi.fn();
+const mockListResumableSessionsForAgent = vi.fn();
 vi.mock("../../src/services/transcript-discovery.js", () => ({
   listResumableSessions: (...args: unknown[]) => mockListResumableSessions(...args),
+  listResumableSessionsForAgent: (...args: unknown[]) => mockListResumableSessionsForAgent(...args),
 }));
 
 import {
@@ -700,7 +702,7 @@ describe("spawnAgent — resume from a transcript (adj-dpgqc)", () => {
     mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-resume" });
     mockProvisionAgentWorktree.mockResolvedValue("/repo/worktrees/kerrigan");
     mockResolveWorktreeDoltEnv.mockReturnValue({ port: 17001, exportLine: "BEADS_DOLT_SERVER_PORT=17001" });
-    mockListResumableSessions.mockResolvedValue([
+    mockListResumableSessionsForAgent.mockResolvedValue([
       { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "2026-09-17T00:00:00.000Z", sizeBytes: 10 },
     ]);
     mockGetPersonaByCallsign.mockReturnValue(undefined);
@@ -760,7 +762,7 @@ describe("spawnAgent — resume from a transcript (adj-dpgqc)", () => {
   it("should refuse when the transcript does not belong to the resolved working directory", async () => {
     // `claude --resume <id>` resolves the session against the CWD it starts in. Resuming
     // from the wrong directory silently starts a different (or empty) session.
-    mockListResumableSessions.mockResolvedValue([
+    mockListResumableSessionsForAgent.mockResolvedValue([
       { sessionId: "some-other-session-id-0001", transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "x", sizeBytes: 1 },
     ]);
 
@@ -841,5 +843,146 @@ describe("spawnAgent — adoption must not type into a live pane (adj-c55l3)", (
     await spawnAgent({ name: "kerrigan", projectPath: "/repo" });
 
     expect(mockExportEnvVars).not.toHaveBeenCalled();
+  });
+});
+
+describe("spawnAgent — resume launches where the transcript actually lives (adj-dpgqc)", () => {
+  const RESUME_ID = "ccc9f2df-5b0b-428a-a3f9-323c51d1c388";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListTmuxSessions.mockResolvedValue(new Set());
+    mockBridgeCreateSession.mockResolvedValue({ success: true, sessionId: "s-resume" });
+    mockProvisionAgentWorktree.mockResolvedValue("/repo/worktrees/kerrigan");
+    mockResolveWorktreeDoltEnv.mockReturnValue({ port: 17000, exportLine: "BEADS_DOLT_SERVER_PORT=17000" });
+    mockGetPersonaByCallsign.mockReturnValue(undefined);
+    mockReadFile.mockRejectedValue(new Error("ENOENT"));
+  });
+
+  it("should resume an agent whose transcript is in the PROJECT ROOT, like the coordinator", async () => {
+    // The coordinator runs in the main repo and has no worktree. spawn_worker always
+    // asks for worktree isolation, so provisioning a worktree here and then looking for
+    // the transcript inside it means the single most important agent to recover after a
+    // crash can never be resumed.
+    mockListResumableSessionsForAgent.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo", modifiedAt: "2026-09-17T00:00:00.000Z", sizeBytes: 10 },
+    ]);
+
+    const result = await spawnAgent({
+      name: "adjutant-coordinator",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({ projectPath: "/repo", resumeSessionId: RESUME_ID }),
+    );
+  });
+
+  it("should launch in the transcript's own cwd, not a guessed one", async () => {
+    mockListResumableSessionsForAgent.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/elsewhere/kerrigan", modifiedAt: "x", sizeBytes: 10 },
+    ]);
+
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({ projectPath: "/elsewhere/kerrigan" }),
+    );
+  });
+
+  it("should NOT provision a worktree when resuming — a resume must not create anything", async () => {
+    // Provisioning first means a REFUSED resume still leaves a new worktree and an
+    // agent/<name> branch behind.
+    mockListResumableSessionsForAgent.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "x", sizeBytes: 10 },
+    ]);
+
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(mockProvisionAgentWorktree).not.toHaveBeenCalled();
+  });
+
+  it("should create nothing when the session is not found anywhere", async () => {
+    mockListResumableSessionsForAgent.mockResolvedValue([]);
+
+    const result = await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(mockProvisionAgentWorktree).not.toHaveBeenCalled();
+    expect(mockBridgeCreateSession).not.toHaveBeenCalled();
+  });
+
+  it("should point a worktree resume at the supervised Dolt server (adj-182.3.1)", async () => {
+    mockListResumableSessionsForAgent.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "x", sizeBytes: 10 },
+    ]);
+    mockResolveWorktreeDoltEnv.mockReturnValue({ port: 17001, exportLine: "BEADS_DOLT_SERVER_PORT=17001" });
+
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        envVars: expect.objectContaining({ BEADS_DOLT_SERVER_PORT: "17001" }),
+      }),
+    );
+  });
+
+  it("should still resume when the Dolt port cannot be resolved — recovery beats tidiness", async () => {
+    mockListResumableSessionsForAgent.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "x", sizeBytes: 10 },
+    ]);
+    mockResolveWorktreeDoltEnv.mockImplementation(() => {
+      throw new Error("no pinned port");
+    });
+
+    const result = await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("should pass caller claudeArgs through on a resume", async () => {
+    mockListResumableSessionsForAgent.mockResolvedValue([
+      { sessionId: RESUME_ID, transcriptPath: "/t.jsonl", cwd: "/repo/worktrees/kerrigan", modifiedAt: "x", sizeBytes: 10 },
+    ]);
+
+    await spawnAgent({
+      name: "kerrigan",
+      projectPath: "/repo",
+      isolation: "worktree",
+      resumeSessionId: RESUME_ID,
+      claudeArgs: ["--model", "opus"],
+    });
+
+    expect(mockBridgeCreateSession).toHaveBeenCalledWith(
+      expect.objectContaining({ claudeArgs: ["--model", "opus"] }),
+    );
   });
 });

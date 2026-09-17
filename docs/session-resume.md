@@ -63,6 +63,9 @@ choice where it belongs.
   prefix a normal spawn gets (`ADJUTANT_AGENT_ID`, `ADJUTANT_PROJECT_ROOT`,
   `ADJUTANT_PERSONA_ID`, `BEADS_DOLT_SERVER_PORT`) — adj-vevei, so the agent binds as
   itself and never as `unknown-agent-*`.
+- Launches in the directory the transcript records, which is why it works for both
+  worktree-isolated agents and the coordinator (no worktree, runs in the canonical
+  checkout). A resume never provisions a worktree or creates a branch.
 - Registers the session **before returning**, so the agent is injectable and
   terminal-streamable immediately. No second `spawn_worker` adoption call.
 - Does **not** re-inject the constitution, the persona or a genesis prompt. All of it is
@@ -71,10 +74,13 @@ choice where it belongs.
 
 ## Refusals, and why each one exists
 
-- **Unknown session for this directory.** `claude --resume` resolves the id against the
-  directory it starts in, so resuming from the wrong directory silently starts a
-  different (or empty) session. That failure looks like "the agent came back wrong",
-  which is far more expensive than a refusal.
+- **No such session for this agent.** The resume searches the directories the agent could
+  have run in (its worktree, the project root, any cwd the registry knows) and launches in
+  the cwd the chosen transcript itself records. `claude --resume` resolves the id against
+  the directory it starts in, so launching from the wrong one silently starts a different
+  (or empty) session — a failure that looks like "the agent came back wrong", which is far
+  more expensive than a refusal. If the id belongs to none of those directories, nothing
+  is created and nothing is launched.
 - **The agent's tmux session is already running.** That case is adoption, not resume.
   Resuming would put a second Claude on the same transcript and the same worktree.
 - **Implausible session id.** The id is interpolated into a command line typed into a

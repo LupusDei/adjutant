@@ -19,7 +19,7 @@ import { getEventBus } from "./event-bus.js";
 import { getSessionBridge } from "./session-bridge.js";
 import type { SessionMode } from "./session-registry.js";
 import { listTmuxSessions, getPaneCurrentCommand, isShellPaneCommand } from "./tmux.js";
-import { listResumableSessions } from "./transcript-discovery.js";
+import { listResumableSessionsForAgent } from "./transcript-discovery.js";
 import { getPersonaService } from "./persona-service.js";
 import { provisionAgentWorktree, resolveWorktreeDoltEnv } from "./worktree-service.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "./adjutant/genesis-prompt.js";
@@ -317,6 +317,101 @@ export async function spawnAgent(
       return { success: true, tmuxSession };
     }
 
+    // ------------------------------------------------------------------------
+    // Resume (adj-dpgqc)
+    // ------------------------------------------------------------------------
+    // Handled BEFORE worktree provisioning, and rooted in the directory the
+    // transcript itself records.
+    //
+    // `claude --resume <id>` resolves the session against the directory it starts
+    // in, so the launch directory is not a detail — it decides whether the agent
+    // comes back at all. Guessing it wrong has two shapes, and both were reachable:
+    //   - the coordinator and other system agents run in the canonical checkout, so
+    //     provisioning a worktree for them and looking there finds nothing. Since
+    //     spawn_worker always asks for worktree isolation, the single most important
+    //     agent to recover after a crash could never be resumed.
+    //   - provisioning first also means a REFUSED resume still leaves a new worktree
+    //     and an `agent/<name>` branch behind.
+    // So: find the session across the directories this agent could have run in, then
+    // launch in the cwd that session actually belongs to. A resume creates nothing.
+    if (req.resumeSessionId) {
+      const candidates = await listResumableSessionsForAgent({
+        agentName: req.name,
+        projectRoot: req.projectPath,
+      });
+      const match = candidates.find((s) => s.sessionId === req.resumeSessionId);
+
+      if (!match) {
+        logWarn("Refusing to resume — no such session for this agent", {
+          name: req.name,
+          projectPath: req.projectPath,
+          resumeSessionId: req.resumeSessionId,
+        });
+        return {
+          success: false,
+          error:
+            `Session '${req.resumeSessionId}' not found for agent '${req.name}' under ${req.projectPath}. ` +
+            `Call list_resumable_sessions for this agent and pick one of its sessions.`,
+        };
+      }
+
+      // The transcript records its own cwd; the directory name it is filed under is
+      // lossy and cannot be reversed, so this is the only trustworthy source.
+      const resumeCwd = match.cwd;
+      if (!resumeCwd) {
+        logWarn("Refusing to resume — transcript records no working directory", {
+          name: req.name,
+          resumeSessionId: req.resumeSessionId,
+        });
+        return {
+          success: false,
+          error:
+            `Session '${req.resumeSessionId}' records no working directory, so there is no safe place to resume it from.`,
+        };
+      }
+
+      // adj-182.3.1: a resume into a worktree points at the SUPERVISED Dolt server,
+      // exactly like a fresh worktree spawn. Best-effort — a resolution failure must
+      // not block a recovery.
+      const resumeEnv: Record<string, string> = { ...req.envVars };
+      if (resumeCwd !== req.projectPath) {
+        try {
+          const { port } = resolveWorktreeDoltEnv(req.projectPath, resumeCwd);
+          resumeEnv["BEADS_DOLT_SERVER_PORT"] = String(port);
+        } catch (err) {
+          logWarn("Could not resolve supervised Dolt port for resumed agent", {
+            name: req.name,
+            error: String(err),
+          });
+        }
+      }
+
+      const resumeResult = await bridge.createSession({
+        name: req.name,
+        projectPath: resumeCwd,
+        mode: (req.mode ?? "swarm") as SessionMode,
+        resumeSessionId: req.resumeSessionId,
+        // The transcript IS the context: no constitution, no persona, no genesis.
+        ...(req.resumeNote ? { initialPrompt: req.resumeNote } : {}),
+        ...(req.claudeArgs && req.claudeArgs.length > 0 ? { claudeArgs: req.claudeArgs } : {}),
+        ...(Object.keys(resumeEnv).length > 0 ? { envVars: resumeEnv } : {}),
+      });
+
+      if (!resumeResult.success) {
+        logWarn("Agent resume failed", { name: req.name, error: resumeResult.error });
+        return { success: false, error: resumeResult.error };
+      }
+
+      logInfo("Agent resumed from transcript", {
+        name: req.name,
+        sessionId: resumeResult.sessionId,
+        resumeSessionId: req.resumeSessionId,
+        cwd: resumeCwd,
+      });
+      scheduleSpawnHealthCheck(req.name, tmuxSession);
+      return { success: true, sessionId: resumeResult.sessionId, tmuxSession };
+    }
+
     // Workspace isolation (adj-182.5): when requested, provision a dedicated git
     // worktree and root the agent there so its file edits never touch the canonical
     // checkout the dev backend watches (adj-8mmyd). Fail-open: if provisioning fails
@@ -345,53 +440,6 @@ export async function spawnAgent(
           name: req.name,
         });
       }
-    }
-
-    // adj-dpgqc: a resume is a different act from a spawn. `claude --resume <id>`
-    // resolves the session against the directory it starts in, so verify the
-    // transcript actually belongs to the directory we are about to launch in —
-    // otherwise Claude quietly starts a different session and the agent comes back
-    // as a stranger.
-    if (req.resumeSessionId) {
-      const resumable = await listResumableSessions({ projectPath: effectiveProjectPath });
-      if (!resumable.some((s) => s.sessionId === req.resumeSessionId)) {
-        logWarn("Refusing to resume — transcript not found for working directory", {
-          name: req.name,
-          projectPath: effectiveProjectPath,
-          resumeSessionId: req.resumeSessionId,
-        });
-        return {
-          success: false,
-          error:
-            `Session '${req.resumeSessionId}' not found for ${effectiveProjectPath}. ` +
-            `List the agent's resumable sessions and pick one recorded for that directory.`,
-        };
-      }
-
-      const resumeResult = await bridge.createSession({
-        name: req.name,
-        projectPath: effectiveProjectPath,
-        mode: (req.mode ?? "swarm") as SessionMode,
-        resumeSessionId: req.resumeSessionId,
-        // The transcript IS the context: no constitution, no persona, no genesis.
-        ...(req.resumeNote ? { initialPrompt: req.resumeNote } : {}),
-        ...(Object.keys({ ...req.envVars, ...isolationEnv }).length > 0
-          ? { envVars: { ...req.envVars, ...isolationEnv } }
-          : {}),
-      });
-
-      if (!resumeResult.success) {
-        logWarn("Agent resume failed", { name: req.name, error: resumeResult.error });
-        return { success: false, error: resumeResult.error };
-      }
-
-      logInfo("Agent resumed from transcript", {
-        name: req.name,
-        sessionId: resumeResult.sessionId,
-        resumeSessionId: req.resumeSessionId,
-      });
-      scheduleSpawnHealthCheck(req.name, tmuxSession);
-      return { success: true, sessionId: resumeResult.sessionId, tmuxSession };
     }
 
     // Constitution injection (adj-160): Read project constitution and inject
