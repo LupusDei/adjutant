@@ -107,7 +107,7 @@ export async function listResumableSessions(
     .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
     .map((e) => e.name);
 
-  const withStats: Array<{ name: string; path: string; mtimeMs: number; size: number }> = [];
+  const withStats: { name: string; path: string; mtimeMs: number; size: number }[] = [];
   for (const name of transcripts) {
     const path = join(projectDir, name);
     try {

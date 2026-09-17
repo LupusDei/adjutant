@@ -34,7 +34,7 @@ vi.mock("../../src/services/transcript-discovery.js", () => ({
   listResumableSessionsForAgent: (...args: unknown[]) => mockListResumableSessionsForAgent(...args),
 }));
 
-const mockFindByName = vi.fn(() => [] as Array<{ projectPath: string }>);
+const mockFindByName = vi.fn(() => [] as { projectPath: string }[]);
 vi.mock("../../src/services/session-bridge.js", () => ({
   getSessionBridge: () => ({
     registry: { findByName: mockFindByName },
