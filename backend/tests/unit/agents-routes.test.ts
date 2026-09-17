@@ -13,8 +13,19 @@ vi.mock("../../src/services/agent-roster.js", () => ({
   getFleetRoster: vi.fn(),
 }));
 
+// adj-dpgqc: resumable-session lookup reads ~/.claude/projects — mocked here so the
+// route test never depends on this machine's transcripts.
+vi.mock("../../src/services/transcript-discovery.js", () => ({
+  listResumableSessionsForAgent: vi.fn(),
+}));
+
+vi.mock("../../src/services/session-bridge.js", () => ({
+  getSessionBridge: () => ({ registry: { findByName: () => [] } }),
+}));
+
 import { agentsRouter } from "../../src/routes/agents.js";
 import { getFleetRoster } from "../../src/services/agent-roster.js";
+import { listResumableSessionsForAgent } from "../../src/services/transcript-discovery.js";
 import type { CrewMember } from "../../src/types/index.js";
 
 /**
@@ -160,5 +171,75 @@ describe("agents routes", () => {
         "agent",
       ]);
     });
+  });
+});
+
+// ============================================================================
+// GET /api/agents/:agentId/sessions (adj-dpgqc)
+// ============================================================================
+
+describe("GET /api/agents/:agentId/sessions", () => {
+  const SESSION = {
+    sessionId: "ccc9f2df-5b0b-428a-a3f9-323c51d1c388",
+    transcriptPath: "/home/.claude/projects/-repo-worktrees-kerrigan/ccc9f2df.jsonl",
+    cwd: "/repo/worktrees/kerrigan",
+    modifiedAt: "2026-09-16T20:54:00.000Z",
+    sizeBytes: 2386827,
+    firstPrompt: "You are a Layer 3 Squad Leader…",
+    lastPrompt: "push the branch",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return the sessions an agent can be resumed from", async () => {
+    vi.mocked(listResumableSessionsForAgent).mockResolvedValue([SESSION]);
+
+    const response = await request(createTestApp()).get("/api/agents/kerrigan/sessions");
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.sessions).toEqual([SESSION]);
+  });
+
+  it("should return an empty list, not a 404, when an agent has no transcripts", async () => {
+    // A 404 would read as "no such agent". The honest answer is "nothing to resume".
+    vi.mocked(listResumableSessionsForAgent).mockResolvedValue([]);
+
+    const response = await request(createTestApp()).get("/api/agents/ghost/sessions");
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.sessions).toEqual([]);
+  });
+
+  it("should pass a limit through", async () => {
+    vi.mocked(listResumableSessionsForAgent).mockResolvedValue([]);
+
+    await request(createTestApp()).get("/api/agents/kerrigan/sessions?limit=3");
+
+    expect(listResumableSessionsForAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agentName: "kerrigan", limit: 3 }),
+    );
+  });
+
+  it("should ignore a non-numeric limit rather than failing the lookup", async () => {
+    vi.mocked(listResumableSessionsForAgent).mockResolvedValue([]);
+
+    const response = await request(createTestApp()).get("/api/agents/kerrigan/sessions?limit=lots");
+
+    expect(response.status).toBe(200);
+    expect(listResumableSessionsForAgent).toHaveBeenCalledWith(
+      expect.not.objectContaining({ limit: expect.anything() }),
+    );
+  });
+
+  it("should return 500 with the reason when discovery fails", async () => {
+    vi.mocked(listResumableSessionsForAgent).mockRejectedValue(new Error("EACCES"));
+
+    const response = await request(createTestApp()).get("/api/agents/kerrigan/sessions");
+
+    expect(response.status).toBe(500);
+    expect(response.body.success).toBe(false);
   });
 });

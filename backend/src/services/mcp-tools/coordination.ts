@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAgentBySession } from "../mcp-server.js";
 import { spawnAgent } from "../agent-spawner-service.js";
+import { listResumableSessionsForAgent } from "../transcript-discovery.js";
 import { updateBead } from "../beads/beads-mutations.js";
 import { getSessionBridge } from "../session-bridge.js";
 import { getEventBus } from "../event-bus.js";
@@ -37,6 +38,16 @@ const ALLOWED_AGENTS = new Set(["adjutant-coordinator", "adjutant"]);
 
 /** Agent IDs that cannot be decommissioned */
 const PROTECTED_AGENTS = new Set(["adjutant-coordinator", "adjutant"]);
+
+/** What `spawn_worker` tells the model it does — including the resume path (adj-dpgqc). */
+const SPAWN_WORKER_DESCRIPTION = [
+  "Spawn a new agent worker with a specific task prompt.",
+  "",
+  "To bring back an agent that died (crash, reboot, killed session) pass resumeSessionId",
+  "instead of relying on a fresh spawn: a resumed agent keeps the context and half-done",
+  "work of the session it is resuming, while a fresh spawn starts from nothing. Call",
+  "list_resumable_sessions first to get the id.",
+].join("\n");
 
 /** Counter for auto-generated agent names */
 let autoNameCounter = 0;
@@ -189,19 +200,48 @@ export function registerCoordinationTools(
   // --------------------------------------------------------------------------
   server.tool(
     "spawn_worker",
-    "Spawn a new agent worker with a specific task prompt",
+    SPAWN_WORKER_DESCRIPTION,
     {
-      prompt: z.string().describe("The task prompt for the new agent"),
+      prompt: z.string().optional().describe("The task prompt for the new agent. Required unless resumeSessionId is given."),
       beadId: z.string().optional().describe("Optional bead to associate with the spawn"),
-      agentName: z.string().optional().describe("Optional name (auto-generated if omitted)"),
+      agentName: z.string().optional().describe("Optional name (auto-generated if omitted). REQUIRED when resuming."),
       projectPath: z.string().optional().describe("Project directory for the agent to work in (e.g., /Users/user/code/project). Defaults to server CWD if omitted."),
+      resumeSessionId: z
+        .string()
+        .optional()
+        .describe(
+          "Resume this agent from an existing Claude Code session instead of starting it cold. Get the id from list_resumable_sessions. The agent comes back with its full context: no prompt is sent and no persona, constitution or genesis is re-injected.",
+        ),
+      resumeNote: z
+        .string()
+        .optional()
+        .describe(
+          "Only with resumeSessionId. A short note delivered once the resumed agent is responsive — the one thing its transcript cannot contain, namely what happened while it was down (e.g. 'the host rebooted at 20:54; your worktree is intact').",
+        ),
     },
-    async ({ prompt, beadId, agentName, projectPath }, extra) => {
+    async ({ prompt, beadId, agentName, projectPath, resumeSessionId, resumeNote }, extra) => {
       const callerAgentId = checkAccess(extra.sessionId);
       if (!callerAgentId) {
         const resolved = resolveCallerOrError(extra.sessionId);
         // Safe: resolved.error is always defined when agentId is undefined
         return resolved.error!;
+      }
+
+      // A resume is always a specific agent being brought back, and an auto-generated
+      // name would look for a transcript that cannot exist.
+      if (resumeSessionId && !agentName) {
+        return jsonResult({
+          success: false,
+          error: "agentName is required when resuming — name the agent you are bringing back.",
+        });
+      }
+      // A cold spawn with no prompt produces an agent sitting idle with no mission.
+      // A resume needs no prompt: the transcript IS the context.
+      if (!resumeSessionId && (prompt === undefined || prompt.trim() === "")) {
+        return jsonResult({
+          success: false,
+          error: "prompt is required to spawn a worker (omit it only when resumeSessionId is given).",
+        });
       }
 
       const name = agentName ?? generateAgentName();
@@ -231,7 +271,13 @@ export function registerCoordinationTools(
       const result = await spawnAgent({
         name,
         projectPath: resolvedProjectPath,
-        initialPrompt: prompt,
+        ...(resumeSessionId
+          ? {
+              resumeSessionId,
+              ...(resumeNote ? { resumeNote } : {}),
+            }
+          // Guarded above: a non-resume spawn always has a prompt by this point.
+          : { initialPrompt: prompt! }),
         // adj-182.5: workers edit files — isolate them in a worktree so their saves
         // never touch the watched canonical checkout and bounce every session (adj-8mmyd).
         isolation: "worktree",
@@ -251,20 +297,92 @@ export function registerCoordinationTools(
         behavior: "adjutant",
         action: "spawn_worker",
         target: name,
-        reason: `Spawned with prompt: ${prompt.slice(0, 100)}`,
+        reason: resumeSessionId
+          ? `Resumed from session ${resumeSessionId}`
+          : `Spawned with prompt: ${(prompt ?? "").slice(0, 100)}`,
       };
       state.logDecision(spawnDecision);
       emitCoordinatorAction(eventStore, callerAgentId, spawnDecision);
 
-      state.logSpawn(name, `Spawned via spawn_worker tool`, beadId);
+      state.logSpawn(
+        name,
+        resumeSessionId
+          ? `Resumed via spawn_worker tool (session ${resumeSessionId})`
+          : `Spawned via spawn_worker tool`,
+        beadId,
+      );
 
-      logInfo("spawn_worker: agent spawned", { name, sessionId: result.sessionId });
+      logInfo("spawn_worker: agent spawned", {
+        name,
+        sessionId: result.sessionId,
+        ...(resumeSessionId ? { resumedFrom: resumeSessionId } : {}),
+      });
 
       return jsonResult({
         success: true,
         agentName: name,
         sessionId: result.sessionId,
+        ...(resumeSessionId ? { resumedFrom: resumeSessionId } : {}),
       });
+    },
+  );
+
+  // --------------------------------------------------------------------------
+  // list_resumable_sessions (adj-dpgqc)
+  // --------------------------------------------------------------------------
+  server.tool(
+    "list_resumable_sessions",
+    [
+      "List the Claude Code sessions an agent can be RESUMED from, newest first.",
+      "",
+      "Use this after a crash or reboot, before deciding to respawn: a respawn starts an",
+      "agent with no memory of what it was doing, while a resume brings back the same",
+      "session — its context, its half-finished work, its uncommitted reasoning.",
+      "",
+      "Each entry carries the sessionId to pass to spawn_worker({ resumeSessionId }), the",
+      "working directory it belongs to, when it was last active, and excerpts of the first",
+      "and last things the agent was asked, so you can tell one session from another.",
+      "An empty list means there is no transcript for this agent — respawning is the only",
+      "option. It does NOT mean the agent is running or stopped; check that separately.",
+    ].join("\n"),
+    {
+      agentName: z.string().describe("The agent to look up, e.g. 'kerrigan'"),
+      projectPath: z
+        .string()
+        .optional()
+        .describe("Project root to search under. Defaults to the server's project root."),
+      limit: z.number().optional().describe("Max sessions to return (newest first)"),
+    },
+    async ({ agentName, projectPath, limit }, extra) => {
+      const callerAgentId = checkAccess(extra.sessionId);
+      if (!callerAgentId) {
+        const resolved = resolveCallerOrError(extra.sessionId);
+        return resolved.error!;
+      }
+
+      const projectRoot = projectPath ?? process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
+
+      // The registry knows where a live (or recently live) session was rooted. That
+      // beats guessing, because an agent's transcripts live under the directory it
+      // actually ran in.
+      let knownCwd: string | undefined;
+      try {
+        const sessions = getSessionBridge().registry.findByName(agentName);
+        knownCwd = sessions[0]?.projectPath;
+      } catch {
+        // No bridge (or no session) — fall back to the conventional locations.
+      }
+
+      const sessions = await listResumableSessionsForAgent({
+        agentName,
+        projectRoot,
+        ...(knownCwd ? { knownCwd } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      });
+
+      logInfo("list_resumable_sessions", { agentName, count: sessions.length });
+
+      return jsonResult({ success: true, agentName, sessions });
     },
   );
 

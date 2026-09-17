@@ -20,6 +20,7 @@ import { writeAgentFile } from "../services/agent-file-writer.js";
 import { provisionAgentWorktree } from "../services/worktree-service.js";
 import { buildGenesisPrompt, extractLoreExcerpt } from "../services/adjutant/genesis-prompt.js";
 import { readProjectConstitution, formatConstitutionPrompt } from "../services/agent-spawner-service.js";
+import { listResumableSessionsForAgent } from "../services/transcript-discovery.js";
 import { success, internalError, badRequest, notFound, conflict } from "../utils/responses.js";
 
 /**
@@ -105,6 +106,49 @@ agentsRouter.get("/:agentId/persona-prompt", (req, res) => {
     return res.json(success({ prompt, personaId: persona.id, personaName: persona.name }));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to generate persona prompt";
+    return res.status(500).json(internalError(message));
+  }
+});
+
+/**
+ * GET /api/agents/:agentId/sessions
+ *
+ * The Claude Code sessions this agent can be RESUMED from, newest first (adj-dpgqc).
+ *
+ * After a crash the choice is resume or respawn, and they are not equivalent: a
+ * respawned agent has no memory of the work it was in the middle of. This is the
+ * lookup that makes resume choosable — from the dashboard, or by the coordinator
+ * through the matching `list_resumable_sessions` MCP tool.
+ *
+ * 200 { sessions: [...] } — possibly empty. An agent with no transcript is a normal
+ * state (it never ran here), NOT a 404: a 404 would read as "no such agent".
+ */
+agentsRouter.get("/:agentId/sessions", async (req, res) => {
+  const agentName = req.params.agentId;
+  const projectRoot = process.env["ADJUTANT_PROJECT_ROOT"] ?? process.cwd();
+
+  // A registered session knows the directory the agent actually ran in, which beats
+  // the conventional guesses.
+  let knownCwd: string | undefined;
+  try {
+    knownCwd = getSessionBridge().registry.findByName(agentName)[0]?.projectPath;
+  } catch {
+    // No bridge yet — fall back to the conventional locations.
+  }
+
+  const rawLimit = Number(req.query["limit"]);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : undefined;
+
+  try {
+    const sessions = await listResumableSessionsForAgent({
+      agentName,
+      projectRoot,
+      ...(knownCwd ? { knownCwd } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+    });
+    return res.json(success({ agentName, sessions }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to list resumable sessions";
     return res.status(500).json(internalError(message));
   }
 });

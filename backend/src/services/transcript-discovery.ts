@@ -144,6 +144,63 @@ export async function listResumableSessions(
   return sessions;
 }
 
+export interface ListResumableSessionsForAgentOptions {
+  /** Agent callsign, e.g. "kerrigan". */
+  agentName: string;
+  /** The project the agent works on (the canonical checkout). */
+  projectRoot: string;
+  /**
+   * A working directory already known for this agent — the registry's session
+   * projectPath, or the cwd of a session that just died. Searched first.
+   */
+  knownCwd?: string | undefined;
+  homeDir?: string | undefined;
+  limit?: number | undefined;
+}
+
+/**
+ * Every session an agent could be resumed from, newest first.
+ *
+ * An agent's transcripts are filed under the directory it RAN in, and that is not one
+ * fixed place: worker agents are worktree-isolated (`<root>/worktrees/<name>`, adj-182.5)
+ * while the coordinator and system agents run in the canonical checkout. Rather than
+ * guess, this searches every directory the agent plausibly ran in and merges the results.
+ */
+export async function listResumableSessionsForAgent(
+  opts: ListResumableSessionsForAgentOptions,
+): Promise<ResumableSession[]> {
+  const candidates = [
+    opts.knownCwd,
+    join(opts.projectRoot, "worktrees", opts.agentName),
+    opts.projectRoot,
+  ].filter((p): p is string => typeof p === "string" && p.length > 0);
+
+  const seenDir = new Set<string>();
+  const seenSession = new Set<string>();
+  const all: ResumableSession[] = [];
+
+  for (const candidate of candidates) {
+    // Two candidates can encode to the same transcript directory (a knownCwd that IS
+    // the worktree, say) — read it once.
+    const dirKey = claudeProjectDirName(candidate);
+    if (seenDir.has(dirKey)) continue;
+    seenDir.add(dirKey);
+
+    const sessions = await listResumableSessions({
+      projectPath: candidate,
+      homeDir: opts.homeDir,
+    });
+    for (const session of sessions) {
+      if (seenSession.has(session.sessionId)) continue;
+      seenSession.add(session.sessionId);
+      all.push(session);
+    }
+  }
+
+  all.sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : a.modifiedAt > b.modifiedAt ? -1 : 0));
+  return opts.limit === undefined ? all : all.slice(0, opts.limit);
+}
+
 // ============================================================================
 // Internals
 // ============================================================================

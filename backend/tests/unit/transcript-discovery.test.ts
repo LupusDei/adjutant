@@ -20,6 +20,7 @@ import { join } from "node:path";
 import {
   claudeProjectDirName,
   listResumableSessions,
+  listResumableSessionsForAgent,
 } from "../../src/services/transcript-discovery.js";
 
 let home: string;
@@ -307,5 +308,98 @@ describe("listResumableSessions", () => {
 
     expect(session!.firstPrompt).toBe("LEADER PROMPT");
     expect(session!.lastPrompt).toBe("LEADER PROMPT");
+  });
+});
+
+describe("listResumableSessionsForAgent", () => {
+  const projectRoot = "/Users/6lockdash/code/adjutant";
+  const worktree = "/Users/6lockdash/code/adjutant/worktrees/kerrigan";
+
+  function dirFor(cwd: string): string {
+    const dir = join(home, ".claude", "projects", claudeProjectDirName(cwd));
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  it("should find the agent's sessions in its worktree, which is where isolated agents run", async () => {
+    const dir = dirFor(worktree);
+    writeTranscript(dir, "wt-session-0001", [...headerLines("wt-session-0001"), userPrompt("wt-session-0001", worktree, "own the epic", "t")], 2_000_000);
+
+    const sessions = await listResumableSessionsForAgent({
+      agentName: "kerrigan",
+      projectRoot,
+      homeDir: home,
+    });
+
+    expect(sessions.map((s) => s.sessionId)).toEqual(["wt-session-0001"]);
+    expect(sessions[0]!.cwd).toBe(worktree);
+  });
+
+  it("should also find sessions in the project root, for agents that are not worktree-isolated", async () => {
+    // The coordinator runs in the main repo by design.
+    const dir = dirFor(projectRoot);
+    writeTranscript(dir, "root-session-001", [...headerLines("root-session-001"), userPrompt("root-session-001", projectRoot, "coordinate", "t")], 2_000_000);
+
+    const sessions = await listResumableSessionsForAgent({
+      agentName: "adjutant-coordinator",
+      projectRoot,
+      homeDir: home,
+    });
+
+    expect(sessions.map((s) => s.sessionId)).toEqual(["root-session-001"]);
+  });
+
+  it("should merge candidate directories and order them newest-first across all of them", async () => {
+    const wtDir = dirFor(worktree);
+    const rootDir = dirFor(projectRoot);
+    writeTranscript(rootDir, "older-root-0001", [...headerLines("older-root-0001"), userPrompt("older-root-0001", projectRoot, "a", "t")], 1_000_000);
+    writeTranscript(wtDir, "newer-wt-00001", [...headerLines("newer-wt-00001"), userPrompt("newer-wt-00001", worktree, "b", "t")], 3_000_000);
+
+    const sessions = await listResumableSessionsForAgent({
+      agentName: "kerrigan",
+      projectRoot,
+      homeDir: home,
+    });
+
+    expect(sessions.map((s) => s.sessionId)).toEqual(["newer-wt-00001", "older-root-0001"]);
+  });
+
+  it("should search an explicitly given working directory first — a registered session knows best", async () => {
+    const custom = "/somewhere/else/kerrigan";
+    const dir = dirFor(custom);
+    writeTranscript(dir, "custom-session01", [...headerLines("custom-session01"), userPrompt("custom-session01", custom, "c", "t")], 2_000_000);
+
+    const sessions = await listResumableSessionsForAgent({
+      agentName: "kerrigan",
+      projectRoot,
+      knownCwd: custom,
+      homeDir: home,
+    });
+
+    expect(sessions.map((s) => s.sessionId)).toEqual(["custom-session01"]);
+  });
+
+  it("should not return the same session twice when candidate directories overlap", async () => {
+    const dir = dirFor(worktree);
+    writeTranscript(dir, "dupe-session-01", [...headerLines("dupe-session-01"), userPrompt("dupe-session-01", worktree, "d", "t")], 2_000_000);
+
+    const sessions = await listResumableSessionsForAgent({
+      agentName: "kerrigan",
+      projectRoot,
+      knownCwd: worktree,
+      homeDir: home,
+    });
+
+    expect(sessions).toHaveLength(1);
+  });
+
+  it("should return an empty list for an agent with no transcripts anywhere", async () => {
+    const sessions = await listResumableSessionsForAgent({
+      agentName: "ghost",
+      projectRoot,
+      homeDir: home,
+    });
+
+    expect(sessions).toEqual([]);
   });
 });
